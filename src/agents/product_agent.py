@@ -6,7 +6,6 @@ Bağımsız agent. Hem main_agent hem order_agent tarafından tool olarak kullan
 from langchain.agents import create_agent
 
 from src.config.llm import llm
-from src.memory.checkpointer import get_checkpointer
 from src.tools.product_tools import get_product_details, get_recommendations, search_products
 
 agent = create_agent(
@@ -19,5 +18,4 @@ agent = create_agent(
         "Always include price and stock info in your responses."
     ),
     name="product_agent",
-    checkpointer=get_checkpointer(),
 )

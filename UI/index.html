@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Chat</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Markdown & Code Highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">⚡</span>
+                    <span class="logo-text">Multi-Agent</span>
+                </div>
+                <button class="sidebar-close" id="sidebarClose" title="Sidebar'ı kapat">✕</button>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Bağlantı</h3>
+                <div class="field-group">
+                    <label for="userIdInput">Kullanıcı ID</label>
+                    <input type="text" id="userIdInput" value="user-1" placeholder="user-1">
+                </div>
+                <div class="field-group">
+                    <label for="sessionIdInput">Oturum ID</label>
+                    <div class="field-with-action">
+                        <input type="text" id="sessionIdInput" readonly>
+                        <button class="field-action-btn" id="newSessionBtn" title="Yeni oturum">↻</button>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label for="appIdInput">App ID</label>
+                    <input type="text" id="appIdInput" value="multi-agent-chat" placeholder="app-id">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Agent</h3>
+                <div class="agent-selector">
+                    <button class="agent-btn active" data-agent="main">
+                        <span class="agent-icon">🤖</span>
+                        <span class="agent-label">Main</span>
+                    </button>
+                    <button class="agent-btn" data-agent="product">
+                        <span class="agent-icon">📦</span>
+                        <span class="agent-label">Product</span>
+                    </button>
+                    <button class="agent-btn" data-agent="order">
+                        <span class="agent-icon">🛒</span>
+                        <span class="agent-label">Order</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Mod</h3>
+                <div class="mode-toggle">
+                    <button class="mode-btn" data-mode="stream" id="modeStreamBtn">
+                        <span class="mode-icon">📡</span> Stream
+                    </button>
+                    <button class="mode-btn active" data-mode="non-stream" id="modeNonStreamBtn">
+                        <span class="mode-icon">⚡</span> Non-Stream
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section sidebar-stats">
+                <h3 class="sidebar-title">İstatistikler</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Input</span>
+                        <span class="stat-value" id="inputTokens">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Output</span>
+                        <span class="stat-value" id="outputTokens">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Toplam</span>
+                        <span class="stat-value" id="totalTokens">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">İstek</span>
+                        <span class="stat-value" id="requestCount">0</span>
+                    </div>
+                    <div class="stat-item stat-item-wide">
+                        <span class="stat-label">Ort. Süre</span>
+                        <span class="stat-value" id="avgTime">0ms</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="clear-chat-btn" id="clearChatBtn" title="Sohbeti temizle">
+                    🗑️ Sohbeti Temizle
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <button class="hamburger" id="sidebarToggle" title="Menü">
+                    <span></span><span></span><span></span>
+                </button>
+                <div class="topbar-info">
+                    <span class="topbar-agent" id="topbarAgent">🤖 main</span>
+                    <span class="topbar-status" id="topbarStatus">Hazır</span>
+                </div>
+                <div class="topbar-badge" id="modeBadge">⚡ Non-Stream</div>
+            </header>
+
+            <!-- Stream Progress -->
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill"></div>
+            </div>
+
+            <!-- Stream Event Banner -->
+            <div class="event-banner hidden" id="eventBanner">
+                <span class="event-banner-icon" id="eventBannerIcon">🔄</span>
+                <span class="event-banner-text" id="eventBannerText">İşleniyor...</span>
+            </div>
+
+            <!-- Messages -->
+            <div class="messages" id="messageArea">
+                <div class="welcome-message">
+                    <div class="welcome-icon">👋</div>
+                    <h2>Merhaba!</h2>
+                    <p>Multi-Agent sisteme hoş geldiniz. Size nasıl yardımcı olabilirim?</p>
+                    <div class="welcome-chips">
+                        <button class="chip" data-message="Mevcut ürünleri listele">📦 Ürünleri listele</button>
+                        <button class="chip" data-message="Siparişlerimi göster">🛒 Siparişlerim</button>
+                        <button class="chip" data-message="Yardım">❓ Yardım</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="messageInput" rows="1" placeholder="Mesajınızı yazın..."></textarea>
+                    <button id="sendButton" title="Gönder (Enter)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-hint">
+                    <kbd>Enter</kbd> gönder · <kbd>Shift+Enter</kbd> yeni satır
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Custom Script -->
+    <script src="script.js"></script>
+</body>
+</html>

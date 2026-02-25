@@ -4,42 +4,45 @@ Kullanıcıyla konuşur. Ürün sorusu → product_agent, sipariş sorusu → or
 Basit sorulara (selamlama, genel bilgi) doğrudan cevap verir.
 """
 
+import uuid
+
 from langchain.agents import create_agent
 from langchain.tools import tool
 
 from src.agents.order_agent import agent as order_agent
 from src.agents.product_agent import agent as product_agent
 from src.config.llm import llm
-from src.memory.checkpointer import get_checkpointer
 
 
 # --- Sub-agent'ları tool olarak tanımla ----------------------------------
 
 
 @tool
-def ask_product_specialist(question: str) -> str:
+async def ask_product_specialist(question: str) -> str:
     """Delegate product-related questions to the product specialist.
     Use for: product search, availability, specs, comparisons, recommendations.
 
     Args:
         question: The product-related question from the customer.
     """
-    result = product_agent.invoke(
-        {"messages": [{"role": "user", "content": question}]}
+    result = await product_agent.ainvoke(
+        {"messages": [{"role": "user", "content": question}]},
+        config={"configurable": {"thread_id": f"tool:{uuid.uuid4()}"}},
     )
     return result["messages"][-1].content
 
 
 @tool
-def ask_order_specialist(question: str) -> str:
+async def ask_order_specialist(question: str) -> str:
     """Delegate order-related questions to the order specialist.
     Use for: order tracking, returns, refunds, exchanges.
 
     Args:
         question: The order-related question from the customer.
     """
-    result = order_agent.invoke(
-        {"messages": [{"role": "user", "content": question}]}
+    result = await order_agent.ainvoke(
+        {"messages": [{"role": "user", "content": question}]},
+        config={"configurable": {"thread_id": f"tool:{uuid.uuid4()}"}},
     )
     return result["messages"][-1].content
 
@@ -59,5 +62,4 @@ agent = create_agent(
         "into a clear answer for the customer."
     ),
     name="main_agent",
-    checkpointer=get_checkpointer(),
 )

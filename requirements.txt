@@ -1,11 +1,32 @@
-langchain>=1.2.0,<2.0
-langgraph>=1.0.9,<2.0
-langgraph-checkpoint-sqlite>=2.0,<3.0
-langchain-openai>=0.3.0,<1.0
-langfuse>=3.14.0,<4.0
-fastapi>=0.115.0,<1.0
-uvicorn>=0.34.0,<1.0
-pydantic>=2.0,<3.0
-pydantic-settings>=2.0,<3.0
-python-dotenv>=1.0,<2.0
-sse-starlette>=2.0,<3.0
+# Core LLM & LangChain altyapısı
+langchain==1.2.10  # PyPI en güncel sürüm, içsel olarak langchain-core, langgraph ve pydantic’i yükler :contentReference[oaicite:0]{index=0}
+
+# LangGraph orchestration
+langgraph==1.0.9  # En son PyPI sürümü (kendi alt parçalarını çeker) :contentReference[oaicite:1]{index=1}
+
+# LangChain + OpenAI entegrasyonu
+langchain-openai==1.1.9  # En son sürüm bağlayıcı paket :contentReference[oaicite:2]{index=2}
+
+# langgraph sqlite backend
+langgraph-checkpoint-sqlite==3.0.3
+
+# Async SQLite (AsyncSqliteSaver için gerekli)
+aiosqlite==0.22.1
+
+# LLM observability/tracing
+langfuse==3.14.5  # En güncel sürüm :contentReference[oaicite:3]{index=3}
+
+# API framework
+fastapi==0.129.0  # En güncel stabile sürüm :contentReference[oaicite:4]{index=4}
+
+# ASGI server
+uvicorn==0.22.0  # En güncel PyPI sürüm :contentReference[oaicite:5]{index=5}
+
+# ENV config loader
+python-dotenv==1.2.1  # En son sürüm :contentReference[oaicite:6]{index=6}
+
+# Server-Sent Events desteği
+sse-starlette==3.2.0  # En son PyPI sürüm :contentReference[oaicite:7]{index=7}
+
+# pydatic-settings
+pydantic-settings==2.2.1

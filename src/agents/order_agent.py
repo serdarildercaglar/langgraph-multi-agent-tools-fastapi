@@ -4,12 +4,13 @@
 müşteriye alternatif ürün önerir (agent-as-tool pattern).
 """
 
+import uuid
+
 from langchain.agents import create_agent
 from langchain.tools import tool
 
 from src.agents.product_agent import agent as product_agent
 from src.config.llm import llm
-from src.memory.checkpointer import get_checkpointer
 from src.tools.order_tools import initiate_exchange, initiate_return, track_order
 
 
@@ -17,7 +18,7 @@ from src.tools.order_tools import initiate_exchange, initiate_return, track_orde
 
 
 @tool
-def find_alternative(category: str, budget: str = "") -> str:
+async def find_alternative(category: str, budget: str = "") -> str:
     """Find alternative products for a return/exchange scenario.
     Delegates to the product specialist agent.
 
@@ -25,8 +26,9 @@ def find_alternative(category: str, budget: str = "") -> str:
         category: Product category to search alternatives in.
         budget: Optional budget constraint.
     """
-    result = product_agent.invoke(
-        {"messages": [{"role": "user", "content": f"Recommend {category} products{' ' + budget if budget else ''}. Customer is exchanging, show top 3 options with prices."}]}
+    result = await product_agent.ainvoke(
+        {"messages": [{"role": "user", "content": f"Recommend {category} products{' ' + budget if budget else ''}. Customer is exchanging, show top 3 options with prices."}]},
+        config={"configurable": {"thread_id": f"tool:{uuid.uuid4()}"}},
     )
     return result["messages"][-1].content
 
@@ -43,5 +45,4 @@ agent = create_agent(
         "to suggest replacement options before finalizing the exchange."
     ),
     name="order_agent",
-    checkpointer=get_checkpointer(),
 )

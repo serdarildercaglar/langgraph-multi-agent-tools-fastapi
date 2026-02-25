@@ -25,14 +25,20 @@ router = APIRouter()
 
 
 def _build_config(req: ChatRequest) -> dict:
-    """Merge Langfuse metadata and optional thread_id into a single config."""
+    """Merge Langfuse metadata and optional thread_id into a single config.
+
+    thread_id = app_id:user_id:session_id
+    Bu composite key farklı uygulamalardan gelen isteklerin
+    aynı agent üzerinde state karışmasını önler.
+    """
     config = get_langfuse_handler(
         user_id=req.user_id,
         session_id=req.session_id,
         app_id=req.app_id,
     )
     if settings.chat_history_enabled and req.session_id:
-        config.setdefault("configurable", {})["thread_id"] = req.session_id
+        thread_id = f"{req.app_id}:{req.user_id}:{req.session_id}"
+        config.setdefault("configurable", {})["thread_id"] = thread_id
     return config
 
 

@@ -1,6 +1,8 @@
-"""Agent registry and Langfuse handler."""
+"""Agent registry, checkpointer wiring, and Langfuse handler."""
 
 from __future__ import annotations
+
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from src.agents.main_agent import agent as main_agent
 from src.agents.order_agent import agent as order_agent
@@ -12,6 +14,15 @@ AGENTS = {
     "order": order_agent,
     "product": product_agent,
 }
+
+
+def wire_checkpointer(checkpointer: AsyncSqliteSaver) -> None:
+    """Assign the async checkpointer to every registered agent.
+
+    Called once during FastAPI lifespan startup.
+    """
+    for agent in AGENTS.values():
+        agent.checkpointer = checkpointer
 
 
 def get_agent(agent_name: str = "main"):
