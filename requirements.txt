@@ -30,3 +30,6 @@ sse-starlette==3.2.0  # En son PyPI sürüm :contentReference[oaicite:7]{index=7
 
 # pydatic-settings
 pydantic-settings==2.2.1
+
+# TOON (Token-Oriented Object Notation) — LLM-friendly data format
+python-toon==0.1.3

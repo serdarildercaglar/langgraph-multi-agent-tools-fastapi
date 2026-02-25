@@ -12,6 +12,7 @@ from langchain.tools import tool
 from src.agents.order_agent import agent as order_agent
 from src.agents.product_agent import agent as product_agent
 from src.config.llm import llm
+from src.middleware.trim import trim_old_messages
 
 
 # --- Sub-agent'ları tool olarak tanımla ----------------------------------
@@ -52,6 +53,7 @@ async def ask_order_specialist(question: str) -> str:
 agent = create_agent(
     model=llm,
     tools=[ask_product_specialist, ask_order_specialist],
+    middleware=[trim_old_messages],
     system_prompt=(
         "You are a customer support manager for an e-commerce store.\n\n"
         "Route customer questions to the right specialist:\n"

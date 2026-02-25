@@ -6,11 +6,13 @@ Bağımsız agent. Hem main_agent hem order_agent tarafından tool olarak kullan
 from langchain.agents import create_agent
 
 from src.config.llm import llm
+from src.middleware.trim import trim_old_messages
 from src.tools.product_tools import get_product_details, get_recommendations, search_products
 
 agent = create_agent(
     model=llm,
     tools=[search_products, get_product_details, get_recommendations],
+    middleware=[trim_old_messages],
     system_prompt=(
         "You are a product specialist for an e-commerce store. "
         "Help customers find products, check availability, compare options, "

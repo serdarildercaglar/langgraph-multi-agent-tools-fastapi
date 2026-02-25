@@ -1,4 +1,4 @@
-"""FastAPI router — /chat (sync) and /chat/stream (SSE)."""
+"""FastAPI router — /chat (sync), /chat/stream (SSE), /agents (discovery)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ import json
 import logging
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse, Response
 from sse_starlette.sse import EventSourceResponse
+from toon import encode as toon_encode
 
 from src.config.settings import settings
 from src.models.schemas import (
@@ -17,7 +19,7 @@ from src.models.schemas import (
     Message,
     Usage,
 )
-from src.providers import get_agent, get_langfuse_handler
+from src.providers import get_agent, get_agents_metadata, get_langfuse_handler
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +145,16 @@ async def chat_stream(req: ChatRequest) -> EventSourceResponse:
             }
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/agents")
+async def list_agents(fmt: str = Query("toon", alias="format")):
+    """Return agent catalog for discovery.
+
+    Default: TOON format (LLM-friendly, fewer tokens).
+    ?format=json for standard JSON.
+    """
+    metadata = get_agents_metadata()
+    if fmt == "json":
+        return JSONResponse(content=metadata)
+    return Response(content=toon_encode(metadata), media_type="text/toon")

@@ -1,4 +1,4 @@
-"""Agent registry, checkpointer wiring, and Langfuse handler."""
+"""Agent registry, checkpointer wiring, Langfuse handler, and discovery metadata."""
 
 from __future__ import annotations
 
@@ -10,9 +10,18 @@ from src.agents.product_agent import agent as product_agent
 from src.config.settings import settings
 
 AGENTS = {
-    "main": main_agent,
-    "order": order_agent,
-    "product": product_agent,
+    "main": {
+        "agent": main_agent,
+        "description": "Customer support manager. Routes to product/order specialists.",
+    },
+    "order": {
+        "agent": order_agent,
+        "description": "Order specialist. Tracking, returns, exchanges.",
+    },
+    "product": {
+        "agent": product_agent,
+        "description": "Product specialist. Search, details, recommendations.",
+    },
 }
 
 
@@ -21,16 +30,60 @@ def wire_checkpointer(checkpointer: AsyncSqliteSaver) -> None:
 
     Called once during FastAPI lifespan startup.
     """
-    for agent in AGENTS.values():
-        agent.checkpointer = checkpointer
+    for entry in AGENTS.values():
+        entry["agent"].checkpointer = checkpointer
 
 
 def get_agent(agent_name: str = "main"):
     """Return a compiled agent graph by name."""
-    agent = AGENTS.get(agent_name)
-    if agent is None:
+    entry = AGENTS.get(agent_name)
+    if entry is None:
         raise ValueError(f"Unknown agent_name: {agent_name!r}. Choose from {list(AGENTS)}")
-    return agent
+    return entry["agent"]
+
+
+def _extract_tools(agent) -> list[dict]:
+    """Extract tool metadata from a compiled agent's graph."""
+    tools_node = agent.nodes.get("tools")
+    if not tools_node:
+        return []
+    bound = getattr(tools_node, "bound", None)
+    if not bound:
+        return []
+    tools_by_name = getattr(bound, "tools_by_name", {})
+    result = []
+    for tool_obj in tools_by_name.values():
+        schema = tool_obj.args_schema.model_json_schema() if tool_obj.args_schema else {}
+        params = []
+        props = schema.get("properties", {})
+        required = set(schema.get("required", []))
+        for pname, pinfo in props.items():
+            ptype = pinfo.get("type", "string")
+            prefix = "" if pname in required else "?"
+            params.append(f"{pname}{prefix}:{ptype}")
+        result.append({
+            "name": tool_obj.name,
+            "description": tool_obj.description.split("\n")[0],
+            "parameters": ",".join(params),
+        })
+    return result
+
+
+def get_agents_metadata() -> dict:
+    """Build agent catalog for discovery API.
+
+    Returns a dict suitable for TOON or JSON encoding.
+    """
+    agents_list = []
+    for name, entry in AGENTS.items():
+        agent = entry["agent"]
+        agents_list.append({
+            "name": name,
+            "description": entry["description"],
+            "endpoint": "/chat",
+            "tools": _extract_tools(agent),
+        })
+    return {"agents": agents_list}
 
 
 def get_langfuse_handler(

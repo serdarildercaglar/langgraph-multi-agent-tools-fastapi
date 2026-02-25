@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     app_env: str
     app_port: int
     chat_history_enabled: bool
+    chat_history_max_tokens: int
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
