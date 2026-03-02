@@ -15,21 +15,29 @@ from fastapi.staticfiles import StaticFiles
 from src.api.router import router
 from src.config.settings import settings
 from src.memory.checkpointer import init_checkpointer, shutdown_checkpointer
-from src.providers import wire_checkpointer
+from src.providers import AGENTS, wire_checkpointer
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init async checkpointer → wire to agents.
+    """Startup: init async checkpointer → wire to agents → warm prompt cache.
     Shutdown: close DB connection.
     """
     if settings.chat_history_enabled:
         checkpointer = await init_checkpointer()
         wire_checkpointer(checkpointer)
         logger.info("AsyncSqliteSaver initialized and wired to agents")
+
+    if settings.langfuse_prompt_management_enabled:
+        from src.middleware.prompt import warm_prompt_cache
+
+        warm_prompt_cache(AGENTS)
+        logger.info("Langfuse prompt cache warmed")
+
     yield
+
     if settings.chat_history_enabled:
         await shutdown_checkpointer()
         logger.info("AsyncSqliteSaver connection closed")

@@ -16,7 +16,8 @@ src/
 │   ├── product_tools.py      # @tool: search_products, get_product_details, get_recommendations
 │   └── order_tools.py        # @tool: track_order, initiate_return, initiate_exchange
 ├── middleware/
-│   └── trim.py               # @before_model — trim_messages ile history kırpma
+│   ├── trim.py               # @before_model — trim_messages ile history kırpma
+│   └── prompt.py             # @wrap_model_call — Langfuse'dan runtime system prompt
 ├── api/
 │   └── router.py             # POST /chat, POST /chat/stream (SSE), GET /agents (discovery)
 ├── config/
@@ -149,6 +150,19 @@ Neden:
 }
 ```
 
+**Error Codes:**
+
+| Code | Description |
+|------|-------------|
+| `agent_not_found` | Geçersiz `agent_name` değeri |
+| `invalid_request` | Request validation hatası |
+| `llm_error` | LLM çağrısı başarısız |
+| `rate_limit` | Rate limiting |
+| `timeout` | Agent veya LLM timeout |
+| `internal_error` | Beklenmeyen sunucu hatası |
+
+`ErrorDetail.code` alanı `Literal` type ile kısıtlıdır — sadece yukarıdaki kodlar geçerlidir. OpenAPI schema'da enum olarak görünür.
+
 **Multimodal request:**
 ```json
 {
@@ -210,12 +224,81 @@ curl -s http://localhost:8080/agents?format=json
 
 Tool metadata (`name`, `description`, `parameters`) compiled agent'lardan runtime'da otomatik çekilir — manuel tool metadata yazmaya gerek yok.
 
+## Langfuse Prompt Management
+
+Agent system prompt'ları Langfuse'dan runtime'da çekilir. Prompt güncellemesi **restart gerektirmez** — ~60 saniye içinde tüm agent'lar yeni prompt'u kullanır.
+
+### Nasıl Çalışır
+
+```
+Langfuse UI'da prompt güncelle
+        ↓
+Cache TTL dolana kadar bekle (default: 60s)
+        ↓
+Stale-while-revalidate: eski prompt döner + arka planda yenisi çekilir
+        ↓
+Sonraki request → yeni prompt aktif
+```
+
+### Mimari
+
+`@wrap_model_call` middleware (`src/middleware/prompt.py`) her LLM çağrısında:
+1. Agent adını tespit eder: `get_config()["metadata"]["lc_agent_name"]`
+2. Langfuse'dan ilgili prompt'u çeker: `client.get_prompt(agent_name, ...)`
+3. System message'ı override eder: `request.override(system_message=...)`
+4. Langfuse erişilemezse hardcoded `system_prompt` fallback olarak kullanılır
+
+**Konvansyon:** Langfuse prompt adı = `create_agent(name=...)` değeri
+
+| Agent | `create_agent(name=...)` | Langfuse Prompt Adı |
+|-------|--------------------------|---------------------|
+| Main | `main_agent` | `main_agent` |
+| Product | `product_agent` | `product_agent` |
+| Order | `order_agent` | `order_agent` |
+
+### Cache Davranışı
+
+| Senaryo | Ne olur | Latency |
+|---------|---------|---------|
+| Cache sıcak (<TTL) | Bellekten döner | ~μs |
+| Cache expire (stale) | Stale döner + daemon thread'de HTTP refresh | ~μs |
+| Cache boş (ilk çağrı) | Blocking HTTP call | ~100ms (startup'ta ısıtılır) |
+
+Startup'ta `warm_prompt_cache(AGENTS)` çağrılarak ilk request'te blocking HTTP call önlenir.
+
+### Kurulum
+
+1. `.env`'de `LANGFUSE_PROMPT_MANAGEMENT_ENABLED=true` ayarla
+2. Langfuse UI → Prompts → Create:
+   - **Name**: agent adıyla aynı (ör. `main_agent`)
+   - **Type**: Text
+   - **Content**: system prompt metni
+   - **Label**: `production`
+3. `python main.py` ile başlat
+
+`LANGFUSE_PROMPT_MANAGEMENT_ENABLED=false` yapılırsa agent dosyalarındaki hardcoded `system_prompt` kullanılır — hiçbir breaking change yok.
+
 ## Adding a New Agent
 
 1. `tools/<domain>_tools.py` — pure `@tool` fonksiyonları yaz
-2. `agents/<domain>_agent.py` — `from src.config.llm import llm` ve `from src.middleware.trim import trim_old_messages`, `agent = create_agent(..., middleware=[trim_old_messages])` yaz (checkpointer verme)
+2. `agents/<domain>_agent.py` — agent oluştur:
+   ```python
+   from src.config.settings import settings
+   from src.middleware.trim import trim_old_messages
+
+   _middleware = [trim_old_messages]
+   if settings.langfuse_prompt_management_enabled:
+       from src.middleware.prompt import langfuse_prompt
+       _middleware.insert(0, langfuse_prompt)
+
+   agent = create_agent(
+       model=llm, tools=[...], middleware=_middleware,
+       system_prompt="fallback prompt", name="{domain}_agent",
+   )
+   ```
 3. `providers.py` → AGENTS dict'ine ekle: `"<domain>": {"agent": agent, "description": "Kısa açıklama."}`
-4. API'den `agent_name: "<domain>"` ile çağır — `GET /agents` otomatik olarak yeni agent'ı listeler
+4. Langfuse UI'da `{domain}_agent` adıyla Text prompt oluştur (label: `production`)
+5. API'den `agent_name: "<domain>"` ile çağır — `GET /agents` otomatik olarak yeni agent'ı listeler
 
 Bir agent başka bir agent'ı tool olarak kullanacaksa:
 - O agent'ın `agent` objesini import et
@@ -233,6 +316,8 @@ Bir agent başka bir agent'ı tool olarak kullanacaksa:
 | `LANGFUSE_SECRET_KEY` | Langfuse secret key |
 | `LANGFUSE_HOST` | Langfuse host URL |
 | `LANGFUSE_ENABLED` | Enable/disable tracing |
+| `LANGFUSE_PROMPT_MANAGEMENT_ENABLED` | Enable/disable Langfuse prompt management |
+| `LANGFUSE_PROMPT_CACHE_TTL` | Prompt cache TTL in seconds (default: 60) |
 | `APP_ENV` | development / production |
 | `APP_PORT` | Server port |
 | `CHAT_HISTORY_ENABLED` | true = conversational, false = stateless Q&A |

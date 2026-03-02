@@ -11,6 +11,7 @@ from langchain.tools import tool
 
 from src.agents.product_agent import agent as product_agent
 from src.config.llm import llm
+from src.config.settings import settings
 from src.middleware.trim import trim_old_messages
 from src.tools.order_tools import initiate_exchange, initiate_return, track_order
 
@@ -36,10 +37,16 @@ async def find_alternative(category: str, budget: str = "") -> str:
 
 # --- Agent ----------------------------------------------------------------
 
+_middleware = [trim_old_messages]
+if settings.langfuse_prompt_management_enabled:
+    from src.middleware.prompt import langfuse_prompt
+
+    _middleware.insert(0, langfuse_prompt)
+
 agent = create_agent(
     model=llm,
     tools=[track_order, initiate_return, initiate_exchange, find_alternative],
-    middleware=[trim_old_messages],
+    middleware=_middleware,
     system_prompt=(
         "You are an order specialist for an e-commerce store. "
         "Help customers track orders, process returns, and handle exchanges.\n\n"

@@ -115,10 +115,11 @@ async def chat_stream(req: ChatRequest) -> EventSourceResponse:
     try:
         agent = get_agent(req.agent_name)
     except ValueError as e:
+        error_msg = str(e)
         async def error_generator():
             yield {
                 "event": "error",
-                "data": json.dumps({"code": "agent_not_found", "message": str(e)}),
+                "data": json.dumps({"code": "agent_not_found", "message": error_msg}),
             }
         return EventSourceResponse(error_generator())
 

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     langfuse_secret_key: str
     langfuse_host: str
     langfuse_enabled: bool
+    langfuse_prompt_management_enabled: bool
+    langfuse_prompt_cache_ttl: int
 
     # App
     app_env: str

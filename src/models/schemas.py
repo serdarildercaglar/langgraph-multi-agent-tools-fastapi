@@ -3,6 +3,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+# --- Error Codes --------------------------------------------------------------
+
+ErrorCode = Literal[
+    "agent_not_found",
+    "invalid_request",
+    "llm_error",
+    "rate_limit",
+    "timeout",
+    "internal_error",
+]
+
 
 # --- Message ---------------------------------------------------------------
 
@@ -56,8 +67,8 @@ class Usage(BaseModel):
 class ErrorDetail(BaseModel):
     """Structured error information."""
 
-    code: str = Field(
-        description="Error code: agent_not_found, invalid_request, llm_error",
+    code: ErrorCode = Field(
+        description="Machine-readable error code",
     )
     message: str = Field(description="Human-readable error message")
     details: dict[str, Any] | None = Field(

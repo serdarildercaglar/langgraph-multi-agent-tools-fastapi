@@ -41,11 +41,13 @@ main.py               # FastAPI app + lifespan (checkpointer init/shutdown)
 
 ## schemas.py — sabit API kontratı
 
-`schemas.py` değiştirilmez. Tüm projeler bu standartlara uyar:
+`schemas.py` API kontratıdır. Mevcut alanları BOZMA, geriye uyumluluğu koru:
 - Request: OpenAI chat completion formatı (`messages` listesi, multimodal destekli)
 - Response: `success` + `message` + `error` zarfı, `id`, `usage`, `created_at`
 - Validation: `min_length`, `Literal` role, `ge=0` token sayıları
-- Yeni alan eklemek gerekirse mevcut alanları BOZMA, sadece optional alan ekle
+- Yeni alan eklemek gerekirse sadece optional alan ekle
+- Yeni hata kodu eklemek gerekirse `ErrorCode` Literal'e ekle — router'da serbest string kullanma
+- `ErrorCode` dışında tip değişikliği yapma (ör. `str` → `int` gibi breaking change yasak)
 
 ## Checkpointer ve state yönetimi
 
@@ -128,7 +130,7 @@ AGENTS = {
 
 ## Kurallar — kesinlikle uy
 
-- `schemas.py`'yi DEĞİŞTİRME. Bu dosya sabit API kontratı
+- `schemas.py` API kontratıdır — mevcut alanları bozma, yeni hata kodu ekleyeceksen `ErrorCode` Literal'e ekle
 - Wrapper / factory fonksiyon YAZMA (build_*, make_*, create_* def'leri yasak)
 - Agent dosyası module-level `agent = create_agent(...)` ile bitmeli, fonksiyona sarma
 - Agent'a create_agent'da checkpointer VERME — lifespan'da wire edilir

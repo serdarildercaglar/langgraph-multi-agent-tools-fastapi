@@ -12,6 +12,7 @@ from langchain.tools import tool
 from src.agents.order_agent import agent as order_agent
 from src.agents.product_agent import agent as product_agent
 from src.config.llm import llm
+from src.config.settings import settings
 from src.middleware.trim import trim_old_messages
 
 
@@ -50,10 +51,16 @@ async def ask_order_specialist(question: str) -> str:
 
 # --- Supervisor -----------------------------------------------------------
 
+_middleware = [trim_old_messages]
+if settings.langfuse_prompt_management_enabled:
+    from src.middleware.prompt import langfuse_prompt
+
+    _middleware.insert(0, langfuse_prompt)
+
 agent = create_agent(
     model=llm,
     tools=[ask_product_specialist, ask_order_specialist],
-    middleware=[trim_old_messages],
+    middleware=_middleware,
     system_prompt=(
         "You are a customer support manager for an e-commerce store.\n\n"
         "Route customer questions to the right specialist:\n"
