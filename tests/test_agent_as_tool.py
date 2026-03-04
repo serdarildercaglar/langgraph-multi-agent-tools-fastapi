@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from src.agents.main_agent import agent as main_agent
-from src.agents.product_agent import agent as product_agent
+from src.agents.subscription_agent import agent as subscription_agent
 
 
 @pytest.mark.integration
@@ -14,20 +14,20 @@ class TestEphemeralThreadId:
 
     async def test_ephemeral_thread_id_format(self, temp_checkpointer):
         """Sub-agent tool wrapper uses 'tool:' prefix."""
-        from src.agents.main_agent import ask_product_specialist
+        from src.agents.main_agent import ask_subscription_specialist
 
         # The tool source code uses f"tool:{uuid.uuid4()}"
         # We verify this by checking the tool exists and is async
-        assert ask_product_specialist.coroutine is not None
+        assert ask_subscription_specialist.coroutine is not None
 
     async def test_sub_agent_result_in_parent(self, temp_checkpointer):
-        """Product agent response appears in main agent's state."""
+        """Subscription agent response appears in main agent's state."""
         from src.providers import wire_checkpointer
         wire_checkpointer(temp_checkpointer)
 
         thread_id = f"test:parent:{uuid.uuid4()}"
         result = await main_agent.ainvoke(
-            {"messages": [{"role": "user", "content": "Search for laptops under $1000"}]},
+            {"messages": [{"role": "user", "content": "What plans do you have for high data usage?"}]},
             config={"configurable": {"thread_id": thread_id}},
         )
         messages = result["messages"]
@@ -37,17 +37,17 @@ class TestEphemeralThreadId:
 
     async def test_sub_agent_no_persistent_state(self, temp_checkpointer):
         """Ephemeral thread_id leaves no lasting checkpoint."""
-        product_agent.checkpointer = temp_checkpointer
+        subscription_agent.checkpointer = temp_checkpointer
 
         ephemeral_id = f"tool:{uuid.uuid4()}"
-        await product_agent.ainvoke(
-            {"messages": [{"role": "user", "content": "Find headphones"}]},
+        await subscription_agent.ainvoke(
+            {"messages": [{"role": "user", "content": "Search plans for high-data usage"}]},
             config={"configurable": {"thread_id": ephemeral_id}},
         )
 
         # Try to get state for ephemeral thread — should have state but
         # each call creates a new unique thread_id, so no reuse occurs
-        state = await product_agent.aget_state(
+        state = await subscription_agent.aget_state(
             config={"configurable": {"thread_id": ephemeral_id}}
         )
         # State exists for this specific call but won't be reused
@@ -88,7 +88,7 @@ class TestCompositeThreadIdIsolation:
         assert "Hello from app A" not in msgs_b
 
     async def test_different_sessions_isolated(self, temp_checkpointer):
-        """Same user, different sessions → different history."""
+        """Same user, different sessions -> different history."""
         from src.providers import wire_checkpointer
         wire_checkpointer(temp_checkpointer)
 
@@ -110,7 +110,7 @@ class TestCompositeThreadIdIsolation:
         assert "Session 2 message" not in msgs_s1
 
     async def test_session_continuity(self, temp_checkpointer):
-        """Same session across 2 requests → context is maintained."""
+        """Same session across 2 requests -> context is maintained."""
         from src.providers import wire_checkpointer
         wire_checkpointer(temp_checkpointer)
 

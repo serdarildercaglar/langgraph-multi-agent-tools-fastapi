@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.pytest_cache
+.claude
+notebooks
+checkpoints.db
+checkpoints.db-shm
+checkpoints.db-wal
+*.db
+.vscode
+.idea

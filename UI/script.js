@@ -105,16 +105,46 @@ function closeSidebar() {
 dom.sidebarToggle.addEventListener('click', openSidebar);
 dom.sidebarClose.addEventListener('click', closeSidebar);
 
-// ===== AGENT SELECTOR =====
-document.querySelectorAll('.agent-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.agent-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentAgent = btn.dataset.agent;
-        const icon = btn.querySelector('.agent-icon').textContent;
-        dom.topbarAgent.textContent = `${icon} ${currentAgent}`;
+// ===== AGENT SELECTOR (dynamic from API) =====
+const AGENTS_ENDPOINT = `${API_BASE}/agents?format=json`;
+
+function bindAgentButtons() {
+    document.querySelectorAll('.agent-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.agent-btn').forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentAgent = btn.dataset.agent;
+            const icon = btn.querySelector('.agent-icon').textContent;
+            dom.topbarAgent.textContent = `${icon} ${currentAgent}`;
+        });
     });
-});
+}
+
+async function loadAgents() {
+    const selector = $('agentSelector');
+    try {
+        const res = await fetch(AGENTS_ENDPOINT);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        selector.innerHTML = data.agents.map((agent, i) => {
+            const isActive = agent.name === 'main' ? ' active' : '';
+            return `<button class="agent-btn${isActive}" data-agent="${escapeHtml(agent.name)}" title="${escapeHtml(agent.description)}">
+                <span class="agent-icon">🤖</span>
+                <span class="agent-label">${escapeHtml(agent.name)}</span>
+            </button>`;
+        }).join('');
+
+        bindAgentButtons();
+    } catch (err) {
+        console.warn('Failed to load agents from API, using fallback:', err.message);
+        selector.innerHTML = `<button class="agent-btn active" data-agent="main" title="Default agent">
+            <span class="agent-icon">🤖</span>
+            <span class="agent-label">main</span>
+        </button>`;
+        bindAgentButtons();
+    }
+}
 
 // ===== MODE TOGGLE =====
 document.querySelectorAll('.mode-btn').forEach((btn) => {
@@ -156,9 +186,9 @@ function clearChat() {
             <h2>Merhaba!</h2>
             <p>Multi-Agent sisteme hoş geldiniz. Size nasıl yardımcı olabilirim?</p>
             <div class="welcome-chips">
-                <button class="chip" data-message="Mevcut ürünleri listele">📦 Ürünleri listele</button>
-                <button class="chip" data-message="Siparişlerimi göster">🛒 Siparişlerim</button>
-                <button class="chip" data-message="Yardım">❓ Yardım</button>
+                <button class="chip" data-message="Mevcut tarifemi göster">📱 Tarifem</button>
+                <button class="chip" data-message="Son faturamı göster">💳 Faturam</button>
+                <button class="chip" data-message="İnternetim çekmiyor">🔧 Teknik Destek</button>
             </div>
         </div>
     `;
@@ -475,7 +505,8 @@ dom.messageInput.addEventListener('input', function () {
 });
 
 // ===== STARTUP =====
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
+    await loadAgents();
     setStatus('Hazır', '');
     dom.messageInput.focus();
     console.log(`Multi-Agent Chat UI initialized`);

@@ -51,19 +51,8 @@
 
             <div class="sidebar-section">
                 <h3 class="sidebar-title">Agent</h3>
-                <div class="agent-selector">
-                    <button class="agent-btn active" data-agent="main">
-                        <span class="agent-icon">🤖</span>
-                        <span class="agent-label">Main</span>
-                    </button>
-                    <button class="agent-btn" data-agent="product">
-                        <span class="agent-icon">📦</span>
-                        <span class="agent-label">Product</span>
-                    </button>
-                    <button class="agent-btn" data-agent="order">
-                        <span class="agent-icon">🛒</span>
-                        <span class="agent-label">Order</span>
-                    </button>
+                <div class="agent-selector" id="agentSelector">
+                    <!-- Dynamically populated from GET /agents -->
                 </div>
             </div>
 
@@ -144,9 +133,9 @@
                     <h2>Merhaba!</h2>
                     <p>Multi-Agent sisteme hoş geldiniz. Size nasıl yardımcı olabilirim?</p>
                     <div class="welcome-chips">
-                        <button class="chip" data-message="Mevcut ürünleri listele">📦 Ürünleri listele</button>
-                        <button class="chip" data-message="Siparişlerimi göster">🛒 Siparişlerim</button>
-                        <button class="chip" data-message="Yardım">❓ Yardım</button>
+                        <button class="chip" data-message="Mevcut tarifemi göster">📱 Tarifem</button>
+                        <button class="chip" data-message="Son faturamı göster">💳 Faturam</button>
+                        <button class="chip" data-message="İnternetim çekmiyor">🔧 Teknik Destek</button>
                     </div>
                 </div>
             </div>

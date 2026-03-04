@@ -2,19 +2,21 @@
 
 Agentic projeler için **code template**. LangChain 1.2.x (`create_agent`), FastAPI, Langfuse, vLLM.
 
-Mevcut senaryo (e-commerce customer support) sadece örnek. Template herhangi bir domain'e uyarlanabilir.
+Mevcut senaryo (telco customer support) sadece örnek. Template herhangi bir domain'e uyarlanabilir.
 
 ## Project Structure
 
 ```
 src/
 ├── agents/           # Her agent = standalone .py dosyası
-│   ├── main_agent.py         # Supervisor — routes to product/order agents
-│   ├── product_agent.py      # Product search, details, recommendations
-│   └── order_agent.py        # Order tracking, returns, exchanges (uses product_agent as tool)
+│   ├── main_agent.py         # Supervisor — routes to subscription/billing/technical agents
+│   ├── subscription_agent.py # Plan info, upgrades, comparisons, packages
+│   ├── billing_agent.py      # Invoices, charges, payments (uses subscription_agent as tool)
+│   └── technical_agent.py    # Network diagnostics, device compatibility, trouble tickets
 ├── tools/            # Her agent'ın tool'ları ayrı dosyada
-│   ├── product_tools.py      # @tool: search_products, get_product_details, get_recommendations
-│   └── order_tools.py        # @tool: track_order, initiate_return, initiate_exchange
+│   ├── subscription_tools.py # @tool: get_current_plan, search_plans, compare_plans, change_plan, add_package
+│   ├── billing_tools.py      # @tool: get_invoice, get_payment_history, explain_charges, initiate_payment_plan
+│   └── technical_tools.py    # @tool: check_network_status, run_line_diagnostic, check_device_compatibility, create_trouble_ticket
 ├── middleware/
 │   ├── trim.py               # @before_model — trim_messages ile history kırpma
 │   └── prompt.py             # @wrap_model_call — Langfuse'dan runtime system prompt
@@ -29,7 +31,22 @@ src/
 │   └── checkpointer.py       # AsyncSqliteSaver (checkpoints.db)
 └── providers.py              # Agent registry, checkpointer wiring, Langfuse handler & discovery metadata
 UI/                           # Chat arayüzü (FastAPI /ui/ ile serve edilir)
+notebooks/
+└── langfuse_prompts.ipynb    # Langfuse'a prompt yükleme notebook'u
 main.py                       # FastAPI entry point + lifespan (checkpointer init/shutdown)
+```
+
+## Agent Architecture
+
+```
+main_agent (supervisor)
+├── ask_subscription_specialist → subscription_agent
+│     Tools: get_current_plan, search_plans, compare_plans, change_plan, add_package
+├── ask_billing_specialist → billing_agent
+│     Tools: get_invoice, get_payment_history, explain_charges, initiate_payment_plan
+│     Agent-as-tool: suggest_plan_change → subscription_agent
+└── ask_technical_specialist → technical_agent
+      Tools: check_network_status, run_line_diagnostic, check_device_compatibility, create_trouble_ticket
 ```
 
 ## Quick Start
@@ -89,7 +106,7 @@ Bu sayede farklı uygulamalardan aynı agent'a gelen istekler birbirinden izole 
 Bir agent başka bir agent'ı tool olarak çağırdığında **ephemeral thread_id** kullanılır (`tool:{uuid}`):
 
 ```python
-result = await product_agent.ainvoke(
+result = await subscription_agent.ainvoke(
     {"messages": [{"role": "user", "content": question}]},
     config={"configurable": {"thread_id": f"tool:{uuid.uuid4()}"}},
 )
@@ -112,7 +129,7 @@ Neden:
   "agent_name": "main",
   "session_id": "sess-abc",
   "messages": [
-    {"role": "user", "content": "I want to return my order ORD-78432"}
+    {"role": "user", "content": "Tarifemi değiştirmek istiyorum"}
   ],
   "metadata": {"department": "support"}
 }
@@ -123,7 +140,7 @@ Neden:
 {
   "id": "a1b2c3d4-...",
   "success": true,
-  "message": {"role": "assistant", "content": "I'll help you with that return..."},
+  "message": {"role": "assistant", "content": "Tarife değişikliği için size yardımcı olayım..."},
   "error": null,
   "usage": {"prompt_tokens": 142, "completion_tokens": 87, "total_tokens": 229},
   "agent_name": "main",
@@ -172,7 +189,7 @@ Neden:
     {
       "role": "user",
       "content": [
-        {"type": "text", "text": "What product is this?"},
+        {"type": "text", "text": "Bu cihazın modeli ne?"},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
       ]
     }
@@ -189,7 +206,7 @@ Same request body. Returns Server-Sent Events:
 
 ### GET /agents — Discovery API
 
-Agent kataloğunu döner. Cross-app agent keşfi için kullanılır — bir orchestrator agent bu endpoint'i okuyup doğru agent'ı seçebilir.
+Agent kataloğunu döner. Cross-app agent keşfi için kullanılır — bir orchestrator agent bu endpoint'i okuyup doğru agent'ı seçebilir. UI sidebar'daki agent listesi de bu endpoint'ten dinamik olarak yüklenir.
 
 **Default format: TOON** (`text/toon`) — LLM-friendly, JSON'a göre %30-60 daha az token.
 JSON için `?format=json` query param ekle.
@@ -207,14 +224,14 @@ curl -s http://localhost:8080/agents?format=json
 {
   "agents": [
     {
-      "name": "product",
-      "description": "Product specialist. Search, details, recommendations.",
+      "name": "subscription",
+      "description": "Subscription specialist. Plan info, upgrades, comparisons, packages.",
       "endpoint": "/chat",
       "tools": [
         {
-          "name": "search_products",
-          "description": "Search the product catalog by keyword.",
-          "parameters": "query:string"
+          "name": "get_current_plan",
+          "description": "Get the customer's current subscription plan details.",
+          "parameters": "msisdn:string"
         }
       ]
     }
@@ -253,8 +270,9 @@ Sonraki request → yeni prompt aktif
 | Agent | `create_agent(name=...)` | Langfuse Prompt Adı |
 |-------|--------------------------|---------------------|
 | Main | `main_agent` | `main_agent` |
-| Product | `product_agent` | `product_agent` |
-| Order | `order_agent` | `order_agent` |
+| Subscription | `subscription_agent` | `subscription_agent` |
+| Billing | `billing_agent` | `billing_agent` |
+| Technical | `technical_agent` | `technical_agent` |
 
 ### Cache Davranışı
 
@@ -269,11 +287,7 @@ Startup'ta `warm_prompt_cache(AGENTS)` çağrılarak ilk request'te blocking HTT
 ### Kurulum
 
 1. `.env`'de `LANGFUSE_PROMPT_MANAGEMENT_ENABLED=true` ayarla
-2. Langfuse UI → Prompts → Create:
-   - **Name**: agent adıyla aynı (ör. `main_agent`)
-   - **Type**: Text
-   - **Content**: system prompt metni
-   - **Label**: `production`
+2. `notebooks/langfuse_prompts.ipynb` notebook'unu çalıştırarak prompt'ları Langfuse'a yükle
 3. `python main.py` ile başlat
 
 `LANGFUSE_PROMPT_MANAGEMENT_ENABLED=false` yapılırsa agent dosyalarındaki hardcoded `system_prompt` kullanılır — hiçbir breaking change yok.
@@ -297,8 +311,8 @@ Startup'ta `warm_prompt_cache(AGENTS)` çağrılarak ilk request'te blocking HTT
    )
    ```
 3. `providers.py` → AGENTS dict'ine ekle: `"<domain>": {"agent": agent, "description": "Kısa açıklama."}`
-4. Langfuse UI'da `{domain}_agent` adıyla Text prompt oluştur (label: `production`)
-5. API'den `agent_name: "<domain>"` ile çağır — `GET /agents` otomatik olarak yeni agent'ı listeler
+4. `notebooks/langfuse_prompts.ipynb`'de yeni prompt'u ekleyip Langfuse'a yükle
+5. API'den `agent_name: "<domain>"` ile çağır — `GET /agents` otomatik olarak yeni agent'ı listeler, UI dinamik güncellenir
 
 Bir agent başka bir agent'ı tool olarak kullanacaksa:
 - O agent'ın `agent` objesini import et

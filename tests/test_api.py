@@ -38,14 +38,14 @@ async def test_post_chat_specific_agent(app_client):
     payload = {
         "app_id": "test",
         "user_id": "u1",
-        "session_id": "s-product",
-        "agent_name": "product",
-        "messages": [{"role": "user", "content": "Search for laptops"}],
+        "session_id": "s-subscription",
+        "agent_name": "subscription",
+        "messages": [{"role": "user", "content": "What plans do you offer?"}],
     }
     resp = await app_client.post("/chat", json=payload)
     data = resp.json()
     assert data["success"] is True
-    assert data["agent_name"] == "product"
+    assert data["agent_name"] == "subscription"
 
 
 async def test_post_chat_invalid_agent(app_client):
@@ -145,8 +145,9 @@ async def test_get_agents_json(app_client):
     assert "agents" in data
     names = [a["name"] for a in data["agents"]]
     assert "main" in names
-    assert "product" in names
-    assert "order" in names
+    assert "subscription" in names
+    assert "billing" in names
+    assert "technical" in names
 
 
 async def test_get_agents_toon(app_client):
@@ -158,10 +159,10 @@ async def test_get_agents_toon(app_client):
 async def test_get_agents_tool_metadata(app_client):
     resp = await app_client.get("/agents?format=json")
     data = resp.json()
-    product_agent = next(a for a in data["agents"] if a["name"] == "product")
-    tool_names = [t["name"] for t in product_agent["tools"]]
-    assert "search_products" in tool_names
-    for tool in product_agent["tools"]:
+    sub_agent = next(a for a in data["agents"] if a["name"] == "subscription")
+    tool_names = [t["name"] for t in sub_agent["tools"]]
+    assert "get_current_plan" in tool_names
+    for tool in sub_agent["tools"]:
         assert "name" in tool
         assert "description" in tool
         assert "parameters" in tool

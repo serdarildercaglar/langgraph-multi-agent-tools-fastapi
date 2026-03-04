@@ -4,23 +4,28 @@ from __future__ import annotations
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+from src.agents.billing_agent import agent as billing_agent
 from src.agents.main_agent import agent as main_agent
-from src.agents.order_agent import agent as order_agent
-from src.agents.product_agent import agent as product_agent
+from src.agents.subscription_agent import agent as subscription_agent
+from src.agents.technical_agent import agent as technical_agent
 from src.config.settings import settings
 
 AGENTS = {
     "main": {
         "agent": main_agent,
-        "description": "Customer support manager. Routes to product/order specialists.",
+        "description": "Customer support manager. Routes to subscription/billing/technical specialists.",
     },
-    "order": {
-        "agent": order_agent,
-        "description": "Order specialist. Tracking, returns, exchanges.",
+    "subscription": {
+        "agent": subscription_agent,
+        "description": "Subscription specialist. Plan info, upgrades, comparisons, packages.",
     },
-    "product": {
-        "agent": product_agent,
-        "description": "Product specialist. Search, details, recommendations.",
+    "billing": {
+        "agent": billing_agent,
+        "description": "Billing specialist. Invoices, charges, payments, installment plans.",
+    },
+    "technical": {
+        "agent": technical_agent,
+        "description": "Technical support specialist. Network, diagnostics, device compatibility, trouble tickets.",
     },
 }
 
@@ -94,7 +99,7 @@ def get_langfuse_handler(
 ) -> dict:
     """Return a config dict with Langfuse callback and metadata.
 
-    LANGFUSE_ENABLED=false ise boş dict döner.
+    LANGFUSE_ENABLED=false ise bos dict doner.
     """
     if not settings.langfuse_enabled:
         return {}
