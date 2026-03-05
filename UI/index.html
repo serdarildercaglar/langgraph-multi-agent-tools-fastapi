@@ -31,7 +31,22 @@
             </div>
 
             <div class="sidebar-section">
-                <h3 class="sidebar-title">Bağlantı</h3>
+                <h3 class="sidebar-title">API Bağlantısı</h3>
+                <div class="field-group">
+                    <label for="apiUrlInput">API URL</label>
+                    <div class="field-with-action">
+                        <input type="text" id="apiUrlInput" value="http://localhost:8080" placeholder="http://localhost:8080">
+                        <button class="connect-btn" id="connectBtn" title="Bağlan">Bağlan</button>
+                    </div>
+                </div>
+                <div class="connection-status disconnected" id="connectionStatus">
+                    <span class="connection-dot"></span>
+                    <span class="connection-text">Bağlı değil</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Oturum</h3>
                 <div class="field-group">
                     <label for="userIdInput">Kullanıcı ID</label>
                     <input type="text" id="userIdInput" value="user-1" placeholder="user-1">
@@ -109,8 +124,8 @@
                     <span></span><span></span><span></span>
                 </button>
                 <div class="topbar-info">
-                    <span class="topbar-agent" id="topbarAgent">🤖 main</span>
-                    <span class="topbar-status" id="topbarStatus">Hazır</span>
+                    <span class="topbar-agent" id="topbarAgent">🤖 ---</span>
+                    <span class="topbar-status" id="topbarStatus">Bağlı değil</span>
                 </div>
                 <div class="topbar-badge" id="modeBadge">⚡ Non-Stream</div>
             </header>
@@ -129,14 +144,9 @@
             <!-- Messages -->
             <div class="messages" id="messageArea">
                 <div class="welcome-message">
-                    <div class="welcome-icon">👋</div>
-                    <h2>Merhaba!</h2>
-                    <p>Multi-Agent sisteme hoş geldiniz. Size nasıl yardımcı olabilirim?</p>
-                    <div class="welcome-chips">
-                        <button class="chip" data-message="Mevcut tarifemi göster">📱 Tarifem</button>
-                        <button class="chip" data-message="Son faturamı göster">💳 Faturam</button>
-                        <button class="chip" data-message="İnternetim çekmiyor">🔧 Teknik Destek</button>
-                    </div>
+                    <div class="welcome-icon">🔌</div>
+                    <h2>Hoş geldiniz!</h2>
+                    <p>Başlamak için sol panelden API URL'nizi girin ve <strong>Bağlan</strong> butonuna tıklayın.</p>
                 </div>
             </div>
 

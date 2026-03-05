@@ -1,8 +1,3 @@
-// ===== CONFIGURATION =====
-const API_BASE = 'http://localhost:8080';
-const CHAT_ENDPOINT = `${API_BASE}/chat`;
-const STREAM_ENDPOINT = `${API_BASE}/chat/stream`;
-
 // ===== MARKDOWN SETUP =====
 marked.setOptions({
     highlight: function (code, lang) {
@@ -34,10 +29,18 @@ function renderMarkdown(text) {
     catch { return text; }
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ===== STATE =====
+let apiBase = null; // set on connect
+let isConnected = false;
 let isProcessing = false;
 let currentStreamMode = 'non-stream';
-let currentAgent = 'main';
+let currentAgent = null;
 let sessionId = generateId('session');
 
 // Cumulative stats
@@ -58,6 +61,9 @@ const dom = {
     sidebar: $('sidebar'),
     sidebarToggle: $('sidebarToggle'),
     sidebarClose: $('sidebarClose'),
+    apiUrlInput: $('apiUrlInput'),
+    connectBtn: $('connectBtn'),
+    connectionStatus: $('connectionStatus'),
     userIdInput: $('userIdInput'),
     sessionIdInput: $('sessionIdInput'),
     appIdInput: $('appIdInput'),
@@ -82,6 +88,9 @@ const dom = {
 
 // ===== INIT =====
 dom.sessionIdInput.value = sessionId;
+dom.sendButton.disabled = true;
+dom.messageInput.disabled = true;
+dom.messageInput.placeholder = 'Önce bir API\'ye bağlanın...';
 
 // ===== SIDEBAR =====
 let overlay = null;
@@ -105,9 +114,151 @@ function closeSidebar() {
 dom.sidebarToggle.addEventListener('click', openSidebar);
 dom.sidebarClose.addEventListener('click', closeSidebar);
 
-// ===== AGENT SELECTOR (dynamic from API) =====
-const AGENTS_ENDPOINT = `${API_BASE}/agents?format=json`;
+// ===== CONNECTION =====
+function setConnectionStatus(status, text) {
+    dom.connectionStatus.className = `connection-status ${status}`;
+    dom.connectionStatus.querySelector('.connection-text').textContent = text;
+}
 
+async function connectToApi() {
+    const url = dom.apiUrlInput.value.trim().replace(/\/+$/, '');
+    if (!url) return;
+
+    dom.connectBtn.disabled = true;
+    dom.connectBtn.textContent = '...';
+    setConnectionStatus('connecting', 'Bağlanıyor...');
+
+    try {
+        const res = await fetch(`${url}/agents?format=json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        apiBase = url;
+        isConnected = true;
+
+        // Populate agents
+        const selector = $('agentSelector');
+        selector.innerHTML = data.agents.map((agent, i) => {
+            const isFirst = i === 0;
+            return `<button class="agent-btn${isFirst ? ' active' : ''}" data-agent="${escapeHtml(agent.name)}" title="${escapeHtml(agent.description)}">
+                <span class="agent-icon">🤖</span>
+                <span class="agent-label">${escapeHtml(agent.name)}</span>
+            </button>`;
+        }).join('');
+
+        bindAgentButtons();
+
+        // Set first agent as current
+        if (data.agents.length > 0) {
+            currentAgent = data.agents[0].name;
+            dom.topbarAgent.textContent = `🤖 ${currentAgent}`;
+        }
+
+        // Enable chat
+        dom.sendButton.disabled = false;
+        dom.messageInput.disabled = false;
+        dom.messageInput.placeholder = 'Mesajınızı yazın...';
+        dom.messageInput.focus();
+
+        // Update UI
+        setConnectionStatus('connected', `Bağlı — ${data.agents.length} agent`);
+        dom.connectBtn.textContent = 'Bağlı';
+        dom.connectBtn.classList.add('connected');
+        setStatus('Hazır', '');
+
+        // Show connected welcome
+        showConnectedWelcome(data.agents);
+
+        console.log(`Connected to ${url} — ${data.agents.length} agents`);
+
+    } catch (err) {
+        isConnected = false;
+        apiBase = null;
+        setConnectionStatus('error', `Hata: ${err.message}`);
+        dom.connectBtn.textContent = 'Bağlan';
+        dom.connectBtn.classList.remove('connected');
+        dom.sendButton.disabled = true;
+        dom.messageInput.disabled = true;
+        dom.messageInput.placeholder = 'Önce bir API\'ye bağlanın...';
+        setStatus('Bağlı değil', 'error');
+    } finally {
+        dom.connectBtn.disabled = false;
+    }
+}
+
+function disconnectApi() {
+    isConnected = false;
+    apiBase = null;
+    currentAgent = null;
+
+    dom.connectBtn.textContent = 'Bağlan';
+    dom.connectBtn.classList.remove('connected');
+    setConnectionStatus('disconnected', 'Bağlı değil');
+
+    dom.sendButton.disabled = true;
+    dom.messageInput.disabled = true;
+    dom.messageInput.placeholder = 'Önce bir API\'ye bağlanın...';
+
+    $('agentSelector').innerHTML = '';
+    dom.topbarAgent.textContent = '🤖 ---';
+    setStatus('Bağlı değil', '');
+
+    // Reset welcome
+    dom.messageArea.innerHTML = `
+        <div class="welcome-message">
+            <div class="welcome-icon">🔌</div>
+            <h2>Hoş geldiniz!</h2>
+            <p>Başlamak için sol panelden API URL'nizi girin ve <strong>Bağlan</strong> butonuna tıklayın.</p>
+        </div>
+    `;
+}
+
+function showConnectedWelcome(agents) {
+    const agentChips = agents.slice(0, 5).map(a =>
+        `<button class="chip" data-agent="${escapeHtml(a.name)}" title="${escapeHtml(a.description)}">🤖 ${escapeHtml(a.name)}</button>`
+    ).join('');
+
+    dom.messageArea.innerHTML = `
+        <div class="welcome-message">
+            <div class="welcome-icon">✅</div>
+            <h2>Bağlantı başarılı!</h2>
+            <p>${agents.length} agent bulundu. Mesajınızı yazarak sohbete başlayabilirsiniz.</p>
+            <div class="welcome-chips">${agentChips}</div>
+        </div>
+    `;
+
+    // Bind agent chips as quick-select
+    dom.messageArea.querySelectorAll('.chip[data-agent]').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const agentName = chip.dataset.agent;
+            // Select agent in sidebar
+            document.querySelectorAll('.agent-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.agent === agentName);
+            });
+            currentAgent = agentName;
+            dom.topbarAgent.textContent = `🤖 ${agentName}`;
+            dom.messageInput.focus();
+        });
+    });
+}
+
+dom.connectBtn.addEventListener('click', () => {
+    if (isConnected) {
+        disconnectApi();
+    } else {
+        connectToApi();
+    }
+});
+
+dom.apiUrlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isConnected) disconnectApi();
+        connectToApi();
+    }
+});
+
+// ===== AGENT SELECTOR =====
 function bindAgentButtons() {
     document.querySelectorAll('.agent-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -118,32 +269,6 @@ function bindAgentButtons() {
             dom.topbarAgent.textContent = `${icon} ${currentAgent}`;
         });
     });
-}
-
-async function loadAgents() {
-    const selector = $('agentSelector');
-    try {
-        const res = await fetch(AGENTS_ENDPOINT);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        selector.innerHTML = data.agents.map((agent, i) => {
-            const isActive = agent.name === 'main' ? ' active' : '';
-            return `<button class="agent-btn${isActive}" data-agent="${escapeHtml(agent.name)}" title="${escapeHtml(agent.description)}">
-                <span class="agent-icon">🤖</span>
-                <span class="agent-label">${escapeHtml(agent.name)}</span>
-            </button>`;
-        }).join('');
-
-        bindAgentButtons();
-    } catch (err) {
-        console.warn('Failed to load agents from API, using fallback:', err.message);
-        selector.innerHTML = `<button class="agent-btn active" data-agent="main" title="Default agent">
-            <span class="agent-icon">🤖</span>
-            <span class="agent-label">main</span>
-        </button>`;
-        bindAgentButtons();
-    }
 }
 
 // ===== MODE TOGGLE =====
@@ -168,37 +293,27 @@ dom.newSessionBtn.addEventListener('click', () => {
     clearChat();
 });
 
-// ===== WELCOME CHIPS =====
-document.querySelectorAll('.chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-        dom.messageInput.value = chip.dataset.message;
-        sendMessage();
-    });
-});
-
 // ===== CLEAR CHAT =====
 dom.clearChatBtn.addEventListener('click', clearChat);
 
 function clearChat() {
-    dom.messageArea.innerHTML = `
-        <div class="welcome-message">
-            <div class="welcome-icon">👋</div>
-            <h2>Merhaba!</h2>
-            <p>Multi-Agent sisteme hoş geldiniz. Size nasıl yardımcı olabilirim?</p>
-            <div class="welcome-chips">
-                <button class="chip" data-message="Mevcut tarifemi göster">📱 Tarifem</button>
-                <button class="chip" data-message="Son faturamı göster">💳 Faturam</button>
-                <button class="chip" data-message="İnternetim çekmiyor">🔧 Teknik Destek</button>
+    if (isConnected) {
+        dom.messageArea.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-icon">👋</div>
+                <h2>Yeni sohbet</h2>
+                <p>Mesajınızı yazarak başlayabilirsiniz.</p>
             </div>
-        </div>
-    `;
-    // Re-bind chips
-    document.querySelectorAll('.chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-            dom.messageInput.value = chip.dataset.message;
-            sendMessage();
-        });
-    });
+        `;
+    } else {
+        dom.messageArea.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-icon">🔌</div>
+                <h2>Hoş geldiniz!</h2>
+                <p>Başlamak için sol panelden API URL'nizi girin ve <strong>Bağlan</strong> butonuna tıklayın.</p>
+            </div>
+        `;
+    }
 }
 
 // ===== MESSAGE RENDERING =====
@@ -229,12 +344,6 @@ function createMessageEl(role, content, agentName) {
     return div;
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function appendMessage(role, content, agentName) {
     removeWelcome();
     const el = createMessageEl(role, content, agentName);
@@ -256,7 +365,7 @@ function setProcessing(active) {
         setStatus('İşleniyor...', 'processing');
     } else {
         dom.progressBar.classList.remove('active');
-        dom.sendButton.disabled = false;
+        dom.sendButton.disabled = !isConnected;
         hideEventBanner();
     }
 }
@@ -320,7 +429,7 @@ async function sendNonStream(body) {
     const start = Date.now();
 
     try {
-        const res = await fetch(CHAT_ENDPOINT, {
+        const res = await fetch(`${apiBase}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -358,7 +467,7 @@ async function sendStream(body) {
     contentEl.classList.add('streaming');
 
     try {
-        const res = await fetch(STREAM_ENDPOINT, {
+        const res = await fetch(`${apiBase}/chat/stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -369,7 +478,7 @@ async function sendStream(body) {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let pendingEvent = 'message'; // default SSE event type
+        let pendingEvent = 'message';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -397,11 +506,9 @@ async function sendStream(body) {
                     } catch (e) {
                         console.warn('SSE parse error:', e);
                     }
-                    pendingEvent = 'message'; // reset after consuming
+                    pendingEvent = 'message';
                     continue;
                 }
-
-                // Empty line = end of SSE block (already handled above)
             }
         }
 
@@ -419,7 +526,6 @@ async function sendStream(body) {
 
         const elapsed = Date.now() - start;
         if (streamBuffer) {
-            // Keep partial content but show error
             contentEl.innerHTML = renderMarkdown(streamBuffer);
         } else {
             contentEl.innerHTML = `Bağlantı hatası: ${escapeHtml(err.message)}`;
@@ -438,7 +544,6 @@ function handleSSE(eventType, payload, contentEl) {
             break;
 
         case 'done':
-            // Stream complete
             break;
 
         case 'error':
@@ -449,7 +554,6 @@ function handleSSE(eventType, payload, contentEl) {
             break;
 
         default:
-            // Unknown event, try to extract content anyway
             if (payload.content) {
                 streamBuffer += payload.content;
                 contentEl.innerHTML = renderMarkdown(streamBuffer);
@@ -461,7 +565,7 @@ function handleSSE(eventType, payload, contentEl) {
 // ===== MAIN SEND =====
 async function sendMessage() {
     const text = dom.messageInput.value.trim();
-    if (!text || isProcessing) return;
+    if (!text || isProcessing || !isConnected) return;
 
     isProcessing = true;
     setProcessing(true);
@@ -505,11 +609,8 @@ dom.messageInput.addEventListener('input', function () {
 });
 
 // ===== STARTUP =====
-window.addEventListener('load', async () => {
-    await loadAgents();
-    setStatus('Hazır', '');
-    dom.messageInput.focus();
-    console.log(`Multi-Agent Chat UI initialized`);
-    console.log(`Chat: ${CHAT_ENDPOINT} | Stream: ${STREAM_ENDPOINT}`);
-    console.log(`Session: ${sessionId}`);
+window.addEventListener('load', () => {
+    setStatus('Bağlı değil', '');
+    dom.topbarAgent.textContent = '🤖 ---';
+    console.log('Multi-Agent Chat UI initialized — waiting for connection');
 });
