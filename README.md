@@ -4,6 +4,18 @@ Agentic projeler için **code template**. LangChain 1.2.x (`create_agent`), Fast
 
 Mevcut senaryo (telco customer support) sadece örnek. Template herhangi bir domain'e uyarlanabilir.
 
+## Quick Start
+
+```bash
+conda create -n langchain python=3.12 -y
+conda activate langchain
+pip install -r requirements.txt
+cp .env.example .env   # fill in your values
+python main.py
+```
+
+UI: `http://localhost:{APP_PORT}/ui/`
+
 ## Project Structure
 
 ```
@@ -49,77 +61,69 @@ main_agent (supervisor)
       Tools: check_network_status, run_line_diagnostic, check_device_compatibility, create_trouble_ticket
 ```
 
-## Quick Start
+`agent_name` gönderilmezse istek default olarak `main_agent`'a yönlenir. Main agent supervisor rolündedir — soruyu analiz eder ve doğru specialist agent'a routing yapar.
 
-```bash
-conda create -n langchain python=3.12 -y
-conda activate langchain
-pip install -r requirements.txt
-cp .env.example .env   # fill in your values
-python main.py
-```
+## Geliştirici Rehberi — Neyi Değiştir, Neye Dokunma
 
-UI: `http://localhost:{APP_PORT}/ui/`
+Bu template'i kendi domain'ine uyarlarken hangi dosyaların değişeceğini, hangilerinin sabit kalacağını bilmek önemlidir.
 
-## State Management & Memory
+### Değiştirmen Gereken Dosyalar
 
-### Mimari
+| Dosya / Klasör | Ne Yaparsın |
+|---|---|
+| `src/tools/<domain>_tools.py` | Kendi domain tool'larını yaz. Mevcut telco tool'larını sil veya değiştir |
+| `src/agents/<domain>_agent.py` | Kendi agent'larını oluştur. `system_prompt` ve `tools` listesini güncelle |
+| `src/providers.py` | `AGENTS` dict'ini güncelle: kendi agent'larını import et ve kaydet |
+| `.env` | vLLM endpoint, Langfuse key'leri, port vb. kendi ortamına göre ayarla |
+| `notebooks/langfuse_prompts.ipynb` | Langfuse kullanıyorsan kendi prompt'larını yükle |
 
-Agent'lar **stateless** oluşturulur (checkpointer `create_agent`'a verilmez). Checkpointer **FastAPI lifespan'da** oluşturulur ve `wire_checkpointer()` ile agent'lara atanır.
+### Dokunma — Sabit Kalan Dosyalar
 
-```
-main.py lifespan → init_checkpointer() → wire_checkpointer(checkpointer)
-                                              ↓
-API isteği → router._build_config() → composite thread_id oluştur
-                                              ↓
-         agent.ainvoke(config={thread_id}) → checkpointer state yükler/kaydeder
-                                              ↓
-         @before_model trim_old_messages → eski mesajları kırp (CHAT_HISTORY_MAX_TOKENS)
-```
+| Dosya | Neden Sabit |
+|---|---|
+| `src/models/schemas.py` | API kontratı. Client'lar bu şemaya göre entegre olur. Mevcut alanları değiştirmek breaking change yaratır |
+| `src/api/router.py` | Endpoint'ler ve request/response akışı tüm domain'ler için aynı |
+| `src/config/settings.py` | Yeni `.env` değişkeni gerekmedikçe dokunma |
+| `src/config/llm.py` | Shared LLM instance. Tüm agent'lar buradan alır |
+| `src/memory/checkpointer.py` | Checkpointer lifecycle. Farklı DB backend'e geçmedikçe dokunma |
+| `src/middleware/trim.py` | Message trimming. Tüm agent'larda aynı şekilde çalışır |
+| `src/middleware/prompt.py` | Langfuse prompt management. Tüm agent'larda aynı şekilde çalışır |
+| `main.py` | Lifespan, CORS, router mount. Agent sayısı değişse bile değişmez |
 
-### Message Trimming
+### Yardımcı Kod Nereye Yazılır?
 
-Her LLM çağrısından önce `@before_model` middleware çalışır. `trim_messages` ile eski mesajlar kırpılır:
-- `strategy="last"` — son N token'lık mesajları tutar
-- `include_system=True` — system prompt her zaman korunur
-- `start_on="human"` — kırpılan mesajlar human mesajla başlar
-- Token limiti `.env`'den `CHAT_HISTORY_MAX_TOKENS` ile ayarlanır
-- Kırpılan mesajlar checkpoint'ten de silinir (`RemoveMessage + REMOVE_ALL_MESSAGES`)
+Agent'ların kullandığı ama doğrudan `@tool` olmayan yardımcı fonksiyonlar (base64 encode/decode, tarih formatlama, API client wrapper, vb.):
 
-### Composite thread_id — Cross-App Isolation
-
-Her istek `app_id`, `user_id` ve `session_id` içerir. Bunlardan tek bir thread_id oluşturulur:
+| Durum | Nereye Koy | Örnek |
+|---|---|---|
+| Tek bir tool dosyasında kullanılan yardımcı | Aynı tool dosyasının içine, `_` prefix ile private fonksiyon | `src/tools/billing_tools.py` → `def _format_currency(amount):` |
+| Birden fazla tool dosyasında kullanılan ortak yardımcı | `src/tools/` içine ayrı modül | `src/tools/utils.py` → `def decode_base64(data):` |
+| Harici API client veya karmaşık iş mantığı (150+ satır) | `src/tools/` altında klasör yapısı | `src/tools/crm/client.py`, `src/tools/crm/mapper.py` |
 
 ```
-thread_id = "{app_id}:{user_id}:{session_id}"
+src/tools/
+├── billing_tools.py          ← @tool fonksiyonları
+├── subscription_tools.py     ← @tool fonksiyonları
+├── utils.py                  ← ortak yardımcı fonksiyonlar (base64, tarih, vb.)
+└── crm/                      ← karmaşık harici entegrasyon
+    ├── __init__.py
+    ├── client.py             ← API client
+    └── mapper.py             ← response mapping
 ```
 
-Bu sayede farklı uygulamalardan aynı agent'a gelen istekler birbirinden izole kalır:
+**Kural:** Yardımcı kodlar `src/tools/` altında kalır. `src/agents/`, `src/config/`, `src/middleware/`, `src/api/`, `src/models/` klasörlerine domain-specific kod eklenmez.
 
-| İstek kaynağı | thread_id | State |
-|---------------|-----------|-------|
-| App A, user-1, sess-1 | `appA:user-1:sess-1` | Kendi konuşması |
-| App B, user-1, sess-1 | `appB:user-1:sess-1` | Tamamen ayrı state |
-
-### Agent-as-Tool — Ephemeral thread_id
-
-Bir agent başka bir agent'ı tool olarak çağırdığında **ephemeral thread_id** kullanılır (`tool:{uuid}`):
-
-```python
-result = await subscription_agent.ainvoke(
-    {"messages": [{"role": "user", "content": question}]},
-    config={"configurable": {"thread_id": f"tool:{uuid.uuid4()}"}},
-)
-```
-
-Neden:
-- Tool çağrısının sonucu zaten **parent agent'ın state'ine** yazılır (AIMessage.tool_calls + ToolMessage)
-- Sub-agent'ın ayrıca history tutmasına gerek yok — çift kayıt olur
-- Her tool çağrısı izole ve tek kullanımlık
+Harici ekiplerden gelen kodların entegrasyon standardı: **[docs/external-tool-guide.md](docs/external-tool-guide.md)**
 
 ## API
 
-### POST /chat
+Üç endpoint mevcuttur:
+
+| Endpoint | Method | Açıklama |
+|---|---|---|
+| `/chat` | POST | Sync agent çağrısı — tam yanıt döner |
+| `/chat/stream` | POST | SSE stream — token token yanıt döner |
+| `/agents` | GET | Discovery — kayıtlı agent'ları listeler (TOON veya JSON) |
 
 **Request:**
 ```json
@@ -130,194 +134,82 @@ Neden:
   "session_id": "sess-abc",
   "messages": [
     {"role": "user", "content": "Tarifemi değiştirmek istiyorum"}
-  ],
-  "metadata": {"department": "support"}
+  ]
 }
 ```
 
-**Response (success):**
+**Response:**
 ```json
 {
   "id": "a1b2c3d4-...",
   "success": true,
   "message": {"role": "assistant", "content": "Tarife değişikliği için size yardımcı olayım..."},
-  "error": null,
   "usage": {"prompt_tokens": 142, "completion_tokens": 87, "total_tokens": 229},
   "agent_name": "main",
-  "app_id": "my-app",
-  "user_id": "user-1",
-  "session_id": "sess-abc",
   "created_at": "2026-02-25T14:30:00Z"
 }
 ```
 
-**Response (error):**
-```json
-{
-  "id": "e5f6g7h8-...",
-  "success": false,
-  "message": null,
-  "error": {"code": "agent_not_found", "message": "Unknown agent_name: 'xyz'", "details": null},
-  "usage": null,
-  "agent_name": null,
-  "app_id": "my-app",
-  "user_id": "user-1",
-  "session_id": null,
-  "created_at": "2026-02-25T14:30:00Z"
-}
-```
+Hata durumunda `success: false` ve `error` alanı döner. Hata kodları: `agent_not_found`, `invalid_request`, `llm_error`, `rate_limit`, `timeout`, `internal_error`.
 
-**Error Codes:**
+Full payload detayları, SSE stream formatı, multimodal request ve discovery API örnekleri: **[docs/api-contract.md](docs/api-contract.md)**
 
-| Code | Description |
-|------|-------------|
-| `agent_not_found` | Geçersiz `agent_name` değeri |
-| `invalid_request` | Request validation hatası |
-| `llm_error` | LLM çağrısı başarısız |
-| `rate_limit` | Rate limiting |
-| `timeout` | Agent veya LLM timeout |
-| `internal_error` | Beklenmeyen sunucu hatası |
+## State Management
 
-`ErrorDetail.code` alanı `Literal` type ile kısıtlıdır — sadece yukarıdaki kodlar geçerlidir. OpenAPI schema'da enum olarak görünür.
+Agent'lar **stateless** oluşturulur. Checkpointer FastAPI lifespan'da başlatılır ve `wire_checkpointer()` ile agent'lara atanır.
 
-**Multimodal request:**
-```json
-{
-  "app_id": "my-app",
-  "user_id": "user-1",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {"type": "text", "text": "Bu cihazın modeli ne?"},
-        {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
-      ]
-    }
-  ]
-}
-```
+- **Composite thread_id:** `{app_id}:{user_id}:{session_id}` — farklı uygulamalardan gelen istekler izole kalır
+- **Stateless mod:** `session_id` gönderilmezse history tutulmaz
+- **Message trimming:** `@before_model` middleware ile eski mesajlar kırpılır (`CHAT_HISTORY_MAX_TOKENS`), system prompt korunur
+- **Agent-as-tool:** Sub-agent çağrılarında `tool:{uuid}` ephemeral thread_id kullanılır — çift kayıt önlenir
 
-### POST /chat/stream
-
-Same request body. Returns Server-Sent Events:
-- `event: token` — `{"content": "..."}` (partial output)
-- `event: done` — `{}` (stream finished)
-- `event: error` — `{"code": "...", "message": "..."}` (on failure)
-
-### GET /agents — Discovery API
-
-Agent kataloğunu döner. Cross-app agent keşfi için kullanılır — bir orchestrator agent bu endpoint'i okuyup doğru agent'ı seçebilir. UI sidebar'daki agent listesi de bu endpoint'ten dinamik olarak yüklenir.
-
-**Default format: TOON** (`text/toon`) — LLM-friendly, JSON'a göre %30-60 daha az token.
-JSON için `?format=json` query param ekle.
-
-```bash
-# TOON (default)
-curl -s http://localhost:8080/agents
-
-# JSON
-curl -s http://localhost:8080/agents?format=json
-```
-
-**JSON response örneği:**
-```json
-{
-  "agents": [
-    {
-      "name": "subscription",
-      "description": "Subscription specialist. Plan info, upgrades, comparisons, packages.",
-      "endpoint": "/chat",
-      "tools": [
-        {
-          "name": "get_current_plan",
-          "description": "Get the customer's current subscription plan details.",
-          "parameters": "msisdn:string"
-        }
-      ]
-    }
-  ]
-}
-```
-
-Tool metadata (`name`, `description`, `parameters`) compiled agent'lardan runtime'da otomatik çekilir — manuel tool metadata yazmaya gerek yok.
+HTTP isteğinin sisteme girişinden agent yanıtına kadar tüm adımlar: **[docs/request-lifecycle.md](docs/request-lifecycle.md)**
 
 ## Langfuse Prompt Management
 
-Agent system prompt'ları Langfuse'dan runtime'da çekilir. Prompt güncellemesi **restart gerektirmez** — ~60 saniye içinde tüm agent'lar yeni prompt'u kullanır.
+Agent system prompt'ları Langfuse'dan runtime'da çekilir. Prompt güncellemesi **restart gerektirmez** — cache TTL (default 60s) dolunca yeni prompt aktif olur.
 
-### Nasıl Çalışır
-
-```
-Langfuse UI'da prompt güncelle
-        ↓
-Cache TTL dolana kadar bekle (default: 60s)
-        ↓
-Stale-while-revalidate: eski prompt döner + arka planda yenisi çekilir
-        ↓
-Sonraki request → yeni prompt aktif
-```
-
-### Mimari
-
-`@wrap_model_call` middleware (`src/middleware/prompt.py`) her LLM çağrısında:
-1. Agent adını tespit eder: `get_config()["metadata"]["lc_agent_name"]`
-2. Langfuse'dan ilgili prompt'u çeker: `client.get_prompt(agent_name, ...)`
-3. System message'ı override eder: `request.override(system_message=...)`
-4. Langfuse erişilemezse hardcoded `system_prompt` fallback olarak kullanılır
-
-**Konvansyon:** Langfuse prompt adı = `create_agent(name=...)` değeri
-
-| Agent | `create_agent(name=...)` | Langfuse Prompt Adı |
-|-------|--------------------------|---------------------|
-| Main | `main_agent` | `main_agent` |
-| Subscription | `subscription_agent` | `subscription_agent` |
-| Billing | `billing_agent` | `billing_agent` |
-| Technical | `technical_agent` | `technical_agent` |
-
-### Cache Davranışı
-
-| Senaryo | Ne olur | Latency |
-|---------|---------|---------|
-| Cache sıcak (<TTL) | Bellekten döner | ~μs |
-| Cache expire (stale) | Stale döner + daemon thread'de HTTP refresh | ~μs |
-| Cache boş (ilk çağrı) | Blocking HTTP call | ~100ms (startup'ta ısıtılır) |
-
-Startup'ta `warm_prompt_cache(AGENTS)` çağrılarak ilk request'te blocking HTTP call önlenir.
-
-### Kurulum
-
-1. `.env`'de `LANGFUSE_PROMPT_MANAGEMENT_ENABLED=true` ayarla
-2. `notebooks/langfuse_prompts.ipynb` notebook'unu çalıştırarak prompt'ları Langfuse'a yükle
-3. `python main.py` ile başlat
-
-`LANGFUSE_PROMPT_MANAGEMENT_ENABLED=false` yapılırsa agent dosyalarındaki hardcoded `system_prompt` kullanılır — hiçbir breaking change yok.
+- `@wrap_model_call` middleware her LLM çağrısında Langfuse'dan prompt çeker
+- **Konvansyon:** Langfuse prompt adı = `create_agent(name=...)` değeri
+- Langfuse erişilemezse agent dosyasındaki hardcoded `system_prompt` fallback olarak kullanılır
+- Startup'ta `warm_prompt_cache()` ile cold-cache latency'si önlenir
+- `LANGFUSE_PROMPT_MANAGEMENT_ENABLED=false` ile tamamen kapatılabilir
 
 ## Adding a New Agent
 
-1. `tools/<domain>_tools.py` — pure `@tool` fonksiyonları yaz
-2. `agents/<domain>_agent.py` — agent oluştur:
-   ```python
-   from src.config.settings import settings
-   from src.middleware.trim import trim_old_messages
+| # | Adım | Dosya |
+|---|---|---|
+| 1 | `@tool` fonksiyonlarını yaz | `src/tools/<domain>_tools.py` |
+| 2 | Agent'ı oluştur (`create_agent`, checkpointer verme) | `src/agents/<domain>_agent.py` |
+| 3 | Agent'ı import et ve `AGENTS` dict'ine ekle | `src/providers.py` |
+| 4 | Langfuse'a prompt yükle (opsiyonel) | `notebooks/langfuse_prompts.ipynb` |
+| 5 | API'den `agent_name: "<domain>"` ile çağır | — |
 
-   _middleware = [trim_old_messages]
-   if settings.langfuse_prompt_management_enabled:
-       from src.middleware.prompt import langfuse_prompt
-       _middleware.insert(0, langfuse_prompt)
+Agent-as-tool olarak kullanılacaksa:
 
-   agent = create_agent(
-       model=llm, tools=[...], middleware=_middleware,
-       system_prompt="fallback prompt", name="{domain}_agent",
-   )
-   ```
-3. `providers.py` → AGENTS dict'ine ekle: `"<domain>": {"agent": agent, "description": "Kısa açıklama."}`
-4. `notebooks/langfuse_prompts.ipynb`'de yeni prompt'u ekleyip Langfuse'a yükle
-5. API'den `agent_name: "<domain>"` ile çağır — `GET /agents` otomatik olarak yeni agent'ı listeler, UI dinamik güncellenir
+| # | Adım | Dosya |
+|---|---|---|
+| 6 | Sub-agent'ı import et, `@tool async def` wrapper yaz | Çağıran agent'ın dosyası |
+| 7 | Wrapper'ı `create_agent(tools=[...])` listesine ekle | Aynı dosya |
 
-Bir agent başka bir agent'ı tool olarak kullanacaksa:
-- O agent'ın `agent` objesini import et
-- `@tool` + `async def` ile sar
-- `await agent.ainvoke(...)` çağır, `config={"configurable": {"thread_id": f"tool:{uuid.uuid4()}"}}` geç
+Agent dosyası template:
+```python
+from src.config.llm import llm
+from src.config.settings import settings
+from src.middleware.trim import trim_old_messages
+
+_middleware = [trim_old_messages]
+if settings.langfuse_prompt_management_enabled:
+    from src.middleware.prompt import langfuse_prompt
+    _middleware.insert(0, langfuse_prompt)
+
+agent = create_agent(
+    model=llm, tools=[...], middleware=_middleware,
+    system_prompt="fallback prompt", name="{domain}_agent",
+)
+```
+
+Harici ekiplerden gelen kodların tool olarak entegrasyonu: **[docs/external-tool-guide.md](docs/external-tool-guide.md)**
 
 ## Configuration (.env)
 
@@ -331,8 +223,19 @@ Bir agent başka bir agent'ı tool olarak kullanacaksa:
 | `LANGFUSE_HOST` | Langfuse host URL |
 | `LANGFUSE_ENABLED` | Enable/disable tracing |
 | `LANGFUSE_PROMPT_MANAGEMENT_ENABLED` | Enable/disable Langfuse prompt management |
-| `LANGFUSE_PROMPT_CACHE_TTL` | Prompt cache TTL in seconds (default: 60) |
+| `LANGFUSE_PROMPT_CACHE_TTL` | Prompt cache TTL in seconds |
 | `APP_ENV` | development / production |
 | `APP_PORT` | Server port |
 | `CHAT_HISTORY_ENABLED` | true = conversational, false = stateless Q&A |
-| `CHAT_HISTORY_MAX_TOKENS` | Max tokens to keep in conversation history (approximate) |
+| `CHAT_HISTORY_MAX_TOKENS` | Max tokens to keep in conversation history |
+
+Tüm config `.env`'den okunur, hardcoded default yoktur. `.env` eksikse uygulama başlamaz (fail-fast).
+
+## Documentation
+
+| Doküman | İçerik |
+|---|---|
+| [docs/request-lifecycle.md](docs/request-lifecycle.md) | HTTP isteğinden agent yanıtına kadar tüm adımlar, middleware zinciri, tool execution akışı |
+| [docs/api-contract.md](docs/api-contract.md) | Request/response şemaları, SSE stream formatı, error code'lar, discovery API |
+| [docs/external-tool-guide.md](docs/external-tool-guide.md) | Harici ekiplerden gelen kodların tool olarak entegrasyonu, kod teslim standardı |
+| [docs/architecture-decisions.md](docs/architecture-decisions.md) | 27 mimari karar (ADR): gerekçeler ve kod kanıtları |
