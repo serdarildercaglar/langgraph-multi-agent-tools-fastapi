@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     chat_history_enabled: bool
     chat_history_max_tokens: int
 
+    # Gateway
+    gateway_secret: str
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

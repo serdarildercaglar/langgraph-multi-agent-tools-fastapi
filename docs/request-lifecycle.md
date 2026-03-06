@@ -13,10 +13,10 @@ Bir HTTP isteğinin sisteme girişinden agent yanıtının dönmesine kadar tüm
                          └──────────────┬──────────────────────────────────┘
                                         │
                                         ▼
-┌──────────┐    ┌──────────────┐    ┌──────────┐    ┌───────────────────┐
-│  Client   │───▶  CORS        │───▶  Router   │───▶  Agent            │
-│  (HTTP)   │    │  Middleware  │    │  router.py│    │  (CompiledGraph) │
-└──────────┘    └──────────────┘    └──────────┘    └────────┬──────────┘
+┌──────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────┐    ┌───────────────────┐
+│  Client   │───▶  Gateway     │───▶  CORS        │───▶  Router   │───▶  Agent            │
+│  (HTTP)   │    │  Auth       │    │  Middleware  │    │  router.py│    │  (CompiledGraph) │
+└──────────┘    └──────────────┘    └──────────────┘    └──────────┘    └────────┬──────────┘
                                                              │
                                     ┌────────────────────────┼────────────────────┐
                                     │                        │                    │
@@ -33,7 +33,7 @@ Bir HTTP isteğinin sisteme girişinden agent yanıtının dönmesine kadar tüm
 
 | Dosya | Sorumluluk |
 |---|---|
-| `main.py` | FastAPI app, lifespan (checkpointer init, prompt cache warmup), CORS, static UI mount |
+| `main.py` | FastAPI app, lifespan (checkpointer init, prompt cache warmup), gateway auth, CORS, static UI mount |
 | `src/api/router.py` | HTTP endpoint'leri (`POST /chat`, `POST /chat/stream`, `GET /agents`) |
 | `src/providers.py` | Agent registry (`AGENTS` dict), `get_agent()`, `wire_checkpointer()`, Langfuse handler, discovery metadata |
 | `src/config/settings.py` | `.env`'den tüm konfigürasyonu okur (`Settings` Pydantic model) |
@@ -91,10 +91,23 @@ async def lifespan(app: FastAPI):
 Client bir HTTP isteği gönderir. FastAPI şu sırayla işler:
 
 ```
-Client → Uvicorn → FastAPI app → CORSMiddleware → Router dispatch
+Client → Uvicorn → FastAPI app → Gateway Auth → CORSMiddleware → Router dispatch
 ```
 
-**CORS yapılandırması** (`main.py:52-57`):
+**Gateway Auth** (`main.py:52-58`):
+
+`GATEWAY_SECRET` doluysa her isteğe `X-Gateway-Secret` header'ı zorunludur. Header eşleşmezse `403 Forbidden` döner. Secret boşsa middleware eklenmez (development modunda herkes erişir).
+
+```python
+if settings.gateway_secret:
+    @app.middleware("http")
+    async def gateway_auth(request: Request, call_next):
+        if request.headers.get("X-Gateway-Secret") != settings.gateway_secret:
+            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        return await call_next(request)
+```
+
+**CORS yapılandırması** (`main.py:60-65`):
 
 ```python
 app.add_middleware(
@@ -105,7 +118,7 @@ app.add_middleware(
 )
 ```
 
-Router `main.py:59`'da bağlanır:
+Router `main.py:67`'de bağlanır:
 
 ```python
 app.include_router(router)
@@ -279,6 +292,8 @@ prompt.compile() → system message override: request.override(system_message=Sy
     ↓
 await handler(request) → sonraki middleware'e veya LLM'e geç
 ```
+
+> **Eşleştirme kuralı:** `lc_agent_name` değeri `create_agent(name="...")` parametresinden gelir. Langfuse dashboard'unda oluşturulan prompt adı bu `name` değeriyle birebir aynı olmalıdır. Ayrı bir mapping tablosu yoktur — convention over configuration (bkz. ADR-20).
 
 Langfuse erişilemezse mevcut system prompt (agent dosyasındaki hardcoded prompt) korunur.
 
@@ -468,7 +483,7 @@ async def list_agents(fmt: str = Query("toon", alias="format")):
 Client HTTP POST /chat
     │
     ▼
-main.py: FastAPI app → CORSMiddleware
+main.py: FastAPI app → Gateway Auth → CORSMiddleware
     │
     ▼
 router.py: chat() endpoint

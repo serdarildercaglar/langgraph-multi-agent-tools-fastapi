@@ -510,6 +510,28 @@ services:
 
 ---
 
+## Güvenlik
+
+### ADR-28: Gateway Secret Middleware
+
+**Karar:** `GATEWAY_SECRET` doluysa tüm HTTP isteklerinde `X-Gateway-Secret` header'ı kontrol edilir. Eşleşmezse `403 Forbidden` döner. Secret boşsa middleware eklenmez.
+
+**Gerekçe:** API'nin önüne API gateway (nginx, Traefik vb.) konulduğunda, sadece gateway üzerinden gelen isteklerin kabul edilmesi gerekir. Shared secret pattern'ı bunu en az karmaşıklıkla sağlar. Development'ta secret boş bırakılarak middleware devre dışı kalır — ekstra konfigürasyon gerekmez.
+
+**Kanıt:** `main.py:52-58`:
+```python
+if settings.gateway_secret:
+    @app.middleware("http")
+    async def gateway_auth(request: Request, call_next):
+        if request.headers.get("X-Gateway-Secret") != settings.gateway_secret:
+            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        return await call_next(request)
+```
+
+**Not:** CORS bu iş için uygun değildir — CORS sadece tarayıcı tarafında çalışır, sunucu tarafında güvenlik sağlamaz. `curl`, Postman veya başka bir backend'den gelen istekleri engellemez.
+
+---
+
 ## Operasyonel Kurallar
 
 ### ADR-27: Manuel Agent Registry

@@ -88,7 +88,7 @@ Bu template'i kendi domain'ine uyarlarken hangi dosyaların değişeceğini, han
 | `src/memory/checkpointer.py` | Checkpointer lifecycle. Farklı DB backend'e geçmedikçe dokunma |
 | `src/middleware/trim.py` | Message trimming. Tüm agent'larda aynı şekilde çalışır |
 | `src/middleware/prompt.py` | Langfuse prompt management. Tüm agent'larda aynı şekilde çalışır |
-| `main.py` | Lifespan, CORS, router mount. Agent sayısı değişse bile değişmez |
+| `main.py` | Lifespan, CORS, gateway auth, router mount. Agent sayısı değişse bile değişmez |
 
 ### Yardımcı Kod Nereye Yazılır?
 
@@ -228,6 +228,7 @@ Harici ekiplerden gelen kodların tool olarak entegrasyonu: **[docs/external-too
 | `APP_PORT` | Server port |
 | `CHAT_HISTORY_ENABLED` | true = conversational, false = stateless Q&A |
 | `CHAT_HISTORY_MAX_TOKENS` | Max tokens to keep in conversation history |
+| `GATEWAY_SECRET` | Shared secret for API gateway auth (empty = disabled) |
 
 Tüm config `.env`'den okunur, hardcoded default yoktur. `.env` eksikse uygulama başlamaz (fail-fast).
 
@@ -238,4 +239,5 @@ Tüm config `.env`'den okunur, hardcoded default yoktur. `.env` eksikse uygulama
 | [docs/request-lifecycle.md](docs/request-lifecycle.md) | HTTP isteğinden agent yanıtına kadar tüm adımlar, middleware zinciri, tool execution akışı |
 | [docs/api-contract.md](docs/api-contract.md) | Request/response şemaları, SSE stream formatı, error code'lar, discovery API |
 | [docs/external-tool-guide.md](docs/external-tool-guide.md) | Harici ekiplerden gelen kodların tool olarak entegrasyonu, kod teslim standardı |
-| [docs/architecture-decisions.md](docs/architecture-decisions.md) | 27 mimari karar (ADR): gerekçeler ve kod kanıtları |
+| [docs/gateway-setup.md](docs/gateway-setup.md) | API Gateway kurulumu: shared secret, nginx/Traefik/Caddy/HAProxy örnekleri |
+| [docs/architecture-decisions.md](docs/architecture-decisions.md) | 28 mimari karar (ADR): gerekçeler ve kod kanıtları |
