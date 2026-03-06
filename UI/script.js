@@ -84,6 +84,8 @@ const dom = {
     requestCountEl: $('requestCount'),
     avgTime: $('avgTime'),
     clearChatBtn: $('clearChatBtn'),
+    modelSection: $('modelSection'),
+    modelSelect: $('modelSelect'),
 };
 
 // ===== INIT =====
@@ -154,6 +156,17 @@ async function connectToApi() {
             dom.topbarAgent.textContent = `🤖 ${currentAgent}`;
         }
 
+        // Fetch available models
+        try {
+            const modelsRes = await fetch(`${url}/models`);
+            if (modelsRes.ok) {
+                const modelsData = await modelsRes.json();
+                populateModels(modelsData.models, modelsData.current);
+            }
+        } catch (e) {
+            console.warn('Could not fetch models:', e);
+        }
+
         // Enable chat
         dom.sendButton.disabled = false;
         dom.messageInput.disabled = false;
@@ -200,6 +213,8 @@ function disconnectApi() {
     dom.messageInput.placeholder = 'Önce bir API\'ye bağlanın...';
 
     $('agentSelector').innerHTML = '';
+    dom.modelSection.style.display = 'none';
+    dom.modelSelect.innerHTML = '';
     dom.topbarAgent.textContent = '🤖 ---';
     setStatus('Bağlı değil', '');
 
@@ -270,6 +285,34 @@ function bindAgentButtons() {
         });
     });
 }
+
+// ===== MODEL SELECTOR =====
+function populateModels(models, current) {
+    if (!models || models.length === 0) {
+        dom.modelSection.style.display = 'none';
+        return;
+    }
+    dom.modelSection.style.display = '';
+    dom.modelSelect.innerHTML = models.map(m =>
+        `<option value="${escapeHtml(m)}"${m === current ? ' selected' : ''}>${escapeHtml(m)}</option>`
+    ).join('');
+}
+
+dom.modelSelect.addEventListener('change', async () => {
+    const model = dom.modelSelect.value;
+    try {
+        const res = await fetch(`${apiBase}/models/current`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model }),
+        });
+        if (res.ok) {
+            console.log(`Model changed to: ${model}`);
+        }
+    } catch (e) {
+        console.warn('Failed to change model:', e);
+    }
+});
 
 // ===== MODE TOGGLE =====
 document.querySelectorAll('.mode-btn').forEach((btn) => {

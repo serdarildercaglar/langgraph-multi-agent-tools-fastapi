@@ -162,9 +162,29 @@ body {
     transition: var(--transition);
 }
 
-.field-group input:focus {
+.field-group input:focus,
+.field-group select:focus {
     border-color: var(--border-active);
     box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.field-group select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.field-group select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 .field-group input[readonly] {

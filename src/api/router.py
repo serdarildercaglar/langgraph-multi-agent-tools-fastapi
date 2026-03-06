@@ -1,4 +1,4 @@
-"""FastAPI router — /chat (sync), /chat/stream (SSE), /agents (discovery)."""
+"""FastAPI router — /chat (sync), /chat/stream (SSE), /agents (discovery), /models."""
 
 from __future__ import annotations
 
@@ -6,11 +6,14 @@ import json
 import logging
 import uuid
 
+import httpx
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel as PydanticBaseModel
 from sse_starlette.sse import EventSourceResponse
 from toon import encode as toon_encode
 
+from src.config.llm import llm
 from src.config.settings import settings
 from src.models.schemas import (
     ChatRequest,
@@ -159,3 +162,36 @@ async def list_agents(fmt: str = Query("toon", alias="format")):
     if fmt == "json":
         return JSONResponse(content=metadata)
     return Response(content=toon_encode(metadata), media_type="text/toon")
+
+
+# --- Model management (test UI) -----------------------------------------------
+
+
+@router.get("/models")
+async def list_models():
+    """Fetch available models from vLLM and return with current selection."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                f"{settings.vllm_base_url}/models",
+                headers={"Authorization": f"Bearer {settings.vllm_api_key}"},
+            )
+            res.raise_for_status()
+            data = res.json()
+        models = [m["id"] for m in data.get("data", [])]
+    except Exception as e:
+        logger.warning("Failed to fetch models from vLLM: %s", e)
+        models = [llm.model_name]
+    return {"models": models, "current": llm.model_name}
+
+
+class _ModelChangeRequest(PydanticBaseModel):
+    model: str
+
+
+@router.put("/models/current")
+async def set_current_model(req: _ModelChangeRequest):
+    """Change the active LLM model (global, for test UI)."""
+    llm.model_name = req.model
+    logger.info("Model changed to: %s", req.model)
+    return {"current": llm.model_name}

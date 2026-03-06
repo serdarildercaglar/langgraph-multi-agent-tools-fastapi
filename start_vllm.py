@@ -3,7 +3,7 @@
 import subprocess
 import sys
 
-MODEL = "Qwen/Qwen2.5-7B-Instruct-AWQ"
+MODEL = "QuantTrio/Qwen3.5-9B-AWQ"
 PORT = 8000
 
 cmd = [
@@ -15,8 +15,9 @@ cmd = [
     "--trust-remote-code",
     "--host", "0.0.0.0",
     "--port", str(PORT),
+    "--reasoning-parser", "qwen3",
     "--enable-auto-tool-choice",
-    "--tool-call-parser", "hermes",
+    "--tool-call-parser", "qwen3_coder",
 ]
 
 print(f"Starting vLLM server with {MODEL} on port {PORT}...")
