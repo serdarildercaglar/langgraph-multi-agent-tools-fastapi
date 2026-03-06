@@ -211,6 +211,40 @@ agent = create_agent(
 
 Harici ekiplerden gelen kodların tool olarak entegrasyonu: **[docs/external-tool-guide.md](docs/external-tool-guide.md)**
 
+## Built-in Test UI
+
+Template ile birlikte gelen chat arayüzü, deploy edilen her agentic uygulamayı hızlıca test etmeyi sağlar. Ayrı bir frontend kurulumu gerektirmez.
+
+**Erişim:** `http://localhost:{APP_PORT}/ui/`
+
+```
+UI/
+├── index.html    # Tek sayfa chat arayüzü
+├── script.js     # API iletişimi, SSE stream, agent seçimi
+└── styles.css    # Responsive tasarım
+```
+
+### Özellikler
+
+| Özellik | Açıklama |
+|---|---|
+| **Dinamik API bağlantısı** | URL gir, Bağlan'a tıkla — herhangi bir instance'a bağlanabilir |
+| **Agent keşfi** | `GET /agents` ile kayıtlı agent'ları otomatik listeler ve seçim sunar |
+| **Stream / Non-Stream mod** | Tek tıkla `POST /chat` (tam yanıt) veya `POST /chat/stream` (SSE) arasında geçiş |
+| **Oturum yönetimi** | User ID, Session ID, App ID ayarlanabilir — composite thread_id test edilebilir |
+| **Token istatistikleri** | Input/output/toplam token, istek sayısı, ortalama yanıt süresi |
+| **Markdown rendering** | Assistant yanıtları markdown + syntax highlighting ile gösterilir |
+| **Responsive** | Mobil ve masaüstünde çalışır, sidebar açılır/kapanır |
+
+### Kullanım Senaryoları
+
+- **Development:** Agent'ı yazarken anında test et — vLLM çalışıyorsa UI'dan direkt dene
+- **Demo:** Paydaşlara agent yeteneklerini canlı göster
+- **Debug:** Stream modda token akışını izle, farklı agent'lar arasında geçiş yap
+- **Entegrasyon testi:** Farklı app_id/user_id/session_id kombinasyonlarıyla state izolasyonunu doğrula
+
+> **Not:** UI static dosyalar olarak FastAPI'den serve edilir (`main.py` → `StaticFiles`). Backend API değiştiğinde UI'ı güncellemeye gerek yoktur — aynı request/response kontratını kullanır.
+
 ## Configuration (.env)
 
 | Variable | Description |
