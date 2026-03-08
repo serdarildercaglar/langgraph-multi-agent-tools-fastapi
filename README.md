@@ -230,6 +230,7 @@ UI/
 |---|---|
 | **Dinamik API bağlantısı** | URL gir, Bağlan'a tıkla — herhangi bir instance'a bağlanabilir |
 | **Agent keşfi** | `GET /agents` ile kayıtlı agent'ları otomatik listeler ve seçim sunar |
+| **Model seçimi** | vLLM'deki mevcut modelleri listeler, dropdown'dan değiştir — restart gerektirmez |
 | **Stream / Non-Stream mod** | Tek tıkla `POST /chat` (tam yanıt) veya `POST /chat/stream` (SSE) arasında geçiş |
 | **Oturum yönetimi** | User ID, Session ID, App ID ayarlanabilir — composite thread_id test edilebilir |
 | **Token istatistikleri** | Input/output/toplam token, istek sayısı, ortalama yanıt süresi |
@@ -242,6 +243,8 @@ UI/
 - **Demo:** Paydaşlara agent yeteneklerini canlı göster
 - **Debug:** Stream modda token akışını izle, farklı agent'lar arasında geçiş yap
 - **Entegrasyon testi:** Farklı app_id/user_id/session_id kombinasyonlarıyla state izolasyonunu doğrula
+
+Detaylı kullanım rehberi ve ekran görüntüleri: **[docs/test-ui.md](docs/test-ui.md)**
 
 > **Not:** UI static dosyalar olarak FastAPI'den serve edilir (`main.py` → `StaticFiles`). Backend API değiştiğinde UI'ı güncellemeye gerek yoktur — aynı request/response kontratını kullanır.
 
@@ -274,4 +277,5 @@ Tüm config `.env`'den okunur, hardcoded default yoktur. `.env` eksikse uygulama
 | [docs/api-contract.md](docs/api-contract.md) | Request/response şemaları, SSE stream formatı, error code'lar, discovery API |
 | [docs/external-tool-guide.md](docs/external-tool-guide.md) | Harici ekiplerden gelen kodların tool olarak entegrasyonu, kod teslim standardı |
 | [docs/gateway-setup.md](docs/gateway-setup.md) | API Gateway kurulumu: shared secret, nginx/Traefik/Caddy/HAProxy örnekleri |
+| [docs/test-ui.md](docs/test-ui.md) | Test UI kullanım rehberi, ekran görüntüleri, model seçimi, API endpoint'leri |
 | [docs/architecture-decisions.md](docs/architecture-decisions.md) | 28 mimari karar (ADR): gerekçeler ve kod kanıtları |

@@ -18,6 +18,8 @@ cmd = [
     "--reasoning-parser", "qwen3",
     "--enable-auto-tool-choice",
     "--tool-call-parser", "qwen3_coder",
+    "--enforce-eager",
+    "--language-model-only",
 ]
 
 print(f"Starting vLLM server with {MODEL} on port {PORT}...")
